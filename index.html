@@ -65,16 +65,17 @@
         }
 
         /* ---------- DASHBOARD LAYOUT ----------
-           Left column: converter card (row 1) + world clock card (row 2), same width.
-           Right column: results card, spanning both rows. */
+           Row 1: converter card (left) + DPC results card (right).
+           Row 2: mcc-mnc search card (left) + mcc-mnc results card (right).
+           Row 3: world clock card (left only, right cell left empty). */
         .dashboard {
             width: 100%;
             max-width: 1500px;
             margin: 0 auto;
             display: grid;
             grid-template-columns: 320px 1fr;
-            grid-template-rows: auto auto;
-            gap: 14px;
+            grid-template-rows: auto auto auto;
+            gap: 10px;
             align-items: stretch;
         }
 
@@ -82,26 +83,32 @@
            (like the results table) force the whole layout wider than the
            viewport on phones — this is what makes a page need pinch-zooming.
            Overriding it to 0 lets each card shrink to the available width. */
-        .converter-card, .worldclock-card, .results-card { min-width: 0; }
+        .converter-card, .mccmnc-card, .worldclock-card, .results-card { min-width: 0; }
 
+        /* Each left "search" card sits in the SAME grid row as its right
+           "results" partner (row 1: converter + DPC results, row 2:
+           mcc-mnc search + mcc-mnc results). Because grid rows stretch
+           every cell in that row to the height of the tallest one
+           (align-items: stretch below), the two cards always end up the
+           same height and their tops/bottoms always line up — no more
+           independent, mismatched heights. Collapsing one side in JS
+           collapses its partner too, so a collapsed row is fully in sync. */
         .converter-card { grid-column: 1; grid-row: 1; }
-        .worldclock-card { grid-column: 1; grid-row: 2; }
+        #resultsCard { grid-column: 2; grid-row: 1; }
+        .mccmnc-card { grid-column: 1; grid-row: 2; }
+        #mccMncResultsCard { grid-column: 2; grid-row: 2; }
+        .worldclock-card { grid-column: 1; grid-row: 3; }
 
-        /* Results card spans both rows and stretches to the same total
-           height as the converter + world clock stack, so its bottom
-           edge lines up with theirs instead of leaving empty space. */
-        .results-card {
-            grid-column: 2;
-            grid-row: 1 / span 2;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
+        /* Every card stretches to fill its grid row's height; making it a
+           flex column and letting the collapsible body grow means that
+           extra height (when its row partner is taller) is absorbed inside
+           the card instead of leaving the two boxes visually misaligned. */
+        .card { display: flex; flex-direction: column; }
+        .collapsible-body { flex: 1 1 auto; min-height: 0; }
 
         @media (max-width: 1000px) {
             .dashboard { grid-template-columns: 1fr; grid-template-rows: auto; }
-            .converter-card, .worldclock-card, .results-card { grid-column: 1; grid-row: auto; }
-            .results-card { height: auto; }
+            .converter-card, .mccmnc-card, .worldclock-card, #resultsCard, #mccMncResultsCard { grid-column: 1; grid-row: auto; }
         }
 
         @media (max-width: 480px) {
@@ -112,18 +119,48 @@
 
         .card {
             background-color: var(--card-bg);
-            padding: 18px;
+            padding: 14px 18px;
             border-radius: 8px;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             color: var(--primary-color);
-            margin: 0 0 14px 0;
+            margin: 0;
             text-align: center;
             font-weight: 600;
         }
+
+        /* ---------- COLLAPSIBLE CARD HEADER (converter + mcc-mnc cards) ---------- */
+        .collapsible-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .collapsible-header h1 { margin: 0; flex: 1; }
+        .collapse-toggle-btn {
+            background: #eef1f5;
+            border: 1px solid #dfe3e8;
+            border-radius: 6px;
+            width: 26px;
+            height: 26px;
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--primary-color);
+            font-size: 0.8rem;
+            transition: transform 0.2s ease;
+        }
+        .collapse-toggle-btn:active { background: #dde3ea; }
+        /* Arrow points down when expanded, rotates to point right when collapsed */
+        .card.collapsed .collapse-toggle-btn { transform: rotate(-90deg); }
+        .card.collapsed .collapsible-body { display: none; }
 
         .card-header-row {
             display: flex;
@@ -159,12 +196,28 @@
             margin: 0;
         }
 
+        .card-title-block { display: flex; flex-direction: column; gap: 2px; }
+        .data-source-note {
+            font-size: 0.68rem;
+            color: var(--muted);
+            font-style: italic;
+        }
+
         /* ---------- CONVERTER ---------- */
         .converter-grid {
             display: flex;
             flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Decimal + Hex side by side on one row, instead of stacked, to
+           save vertical space in the left column. */
+        .dec-hex-row {
+            display: flex;
             gap: 14px;
         }
+        .dec-hex-row .group { flex: 1; }
+        .dec-hex-row .dec-wrapper { width: 100%; }
 
         .group { position: relative; }
 
@@ -219,6 +272,60 @@
         .itu-row { display: flex; align-items: center; gap: 5px; }
         .separator { font-weight: bold; color: #666; user-select: none; }
 
+        /* ---------- MCC-MNC LIVE SEARCH ---------- */
+        .mccmnc-input-wrapper { position: relative; }
+        #mccMncInput { letter-spacing: 1px; }
+
+        .mccmnc-live-results {
+            position: relative;
+            margin-top: 8px;
+            max-height: 216px; /* ~8 rows */
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            display: none;
+        }
+        .mccmnc-live-results.visible { display: block; }
+
+        .mccmnc-result-row {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            padding: 6px 8px;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+            font-size: 0.78rem;
+        }
+        .mccmnc-result-row:last-child { border-bottom: none; }
+        .mccmnc-result-row:hover { background: #f4f6f9; }
+        .mccmnc-result-row.selected { background: var(--highlight-bg); }
+        .mccmnc-result-row .mm-line1 {
+            display: flex;
+            justify-content: space-between;
+            gap: 6px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .mccmnc-result-row .mm-mccmnc { font-family: monospace; color: var(--primary-color); }
+        .mccmnc-result-row .mm-line2 { color: var(--muted); font-size: 0.72rem; }
+        .mccmnc-no-results { padding: 10px; text-align: center; color: var(--muted); font-size: 0.8rem; }
+
+        /* ---------- COUNTRY FLAG (shown next to the dial code) ---------- */
+        .country-flag {
+            font-size: 1.1rem;
+            line-height: 1;
+            margin-right: 5px;
+            vertical-align: -1px;
+        }
+
+        /* ---------- COUNTRY FLAG (results table column) ---------- */
+        th:last-child, td.flag-cell { text-align: center; }
+        .country-flag-lg {
+            font-size: 1rem;
+            line-height: 1;
+            display: inline-block;
+        }
+
         .search-btn {
             width: 100%;
             padding: 9px;
@@ -231,6 +338,20 @@
             cursor: pointer;
         }
         .search-btn:active { background-color: #00408a; }
+
+        .clear-btn {
+            width: 100%;
+            padding: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--muted);
+            background-color: #eef0f3;
+            border: 1px solid #d7dbe0;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: -4px;
+        }
+        .clear-btn:active { background-color: #e2e5e9; }
 
         .hint {
             font-size: 0.72rem;
@@ -318,6 +439,16 @@
         }
         .results-card.revealed .results-placeholder { display: none; }
 
+        /* The MCC-MNC row is meant to stay compact — its row's "normal"
+           (nothing typed yet) height should already match the small,
+           3-row height a picked operator shows, not the taller DPC
+           placeholder above it. This also means Clear (which returns to
+           this same placeholder) never causes a visible height jump. */
+        #mccMncResultsPlaceholder {
+            min-height: 70px;
+            padding: 14px 20px;
+        }
+
         .results-body {
             display: none;
             flex-direction: column;
@@ -336,8 +467,16 @@
             -webkit-overflow-scrolling: touch;
             flex: 1 1 auto;
             min-width: 0;
-            min-height: 300px;
-            max-height: 80vh;
+            /* No min-height: forcing a minimum here fought with the JS-set
+               max-height for the 5-row DPC match window, revealing extra
+               rows below it. flex:1 already lets it grow to fill the card
+               if the row's left-side partner needs more height. */
+            max-height: 300px; /* fixed cap, close to the card's normal
+                                   pre-search (placeholder) height: a wide
+                                   match (e.g. many MCC-MNC rows) scrolls
+                                   inside this box instead of growing the
+                                   card — keeps only two possible card sizes
+                                   (collapsed / expanded). */
             border: 1px solid var(--border-color);
             border-radius: 4px;
         }
@@ -352,7 +491,10 @@
         .no-data { text-align: center; padding: 20px; color: #777; }
 
         /* ---------- WORLD CLOCK PANEL ---------- */
-        .worldclock-card { display: flex; flex-direction: column; gap: 10px; }
+        /* Layout (display:flex/flex-direction:column) is already inherited
+           from the generic .card rule; the header/body gap comes from the
+           shared .collapsible-header margin, same as the other cards. */
+        .worldclock-card .collapsible-body { display: flex; flex-direction: column; gap: 10px; }
 
         .worldclock-placeholder {
             text-align: center;
@@ -533,14 +675,27 @@
 <div class="dashboard">
 
     <!-- CONVERTER CARD -->
-    <div class="card converter-card">
-        <h1>SS7 Point Code Converter</h1>
-        <div class="converter-grid">
-            <div class="group">
-                <label for="decInput">Decimal</label>
-                <div class="input-wrapper dec-wrapper">
-                    <input type="text" id="decInput" placeholder="5446" autocomplete="off" inputmode="numeric" enterkeyhint="search">
-                    <div class="tooltip">0..16383</div>
+    <div class="card converter-card" id="converterCard">
+        <div class="collapsible-header" id="converterHeader">
+            <h1>SS7 Point Code Converter</h1>
+            <div class="collapse-toggle-btn" id="converterToggleBtn" title="Collapse / expand">▼</div>
+        </div>
+        <div class="converter-grid collapsible-body">
+            <div class="dec-hex-row">
+                <div class="group">
+                    <label for="decInput">Decimal</label>
+                    <div class="input-wrapper dec-wrapper">
+                        <input type="text" id="decInput" placeholder="5446" autocomplete="off" inputmode="numeric" enterkeyhint="search">
+                        <div class="tooltip">0..16383</div>
+                    </div>
+                </div>
+
+                <div class="group">
+                    <label for="hexInput">Hex</label>
+                    <div class="input-wrapper dec-wrapper">
+                        <input type="text" id="hexInput" placeholder="1546" autocomplete="off" inputmode="text" enterkeyhint="search" maxlength="4" style="text-transform:uppercase;">
+                        <div class="tooltip">0000..3FFF</div>
+                    </div>
                 </div>
             </div>
 
@@ -564,81 +719,148 @@
                 </div>
             </div>
             <button type="button" id="searchBtn" class="search-btn">🔍 Search</button>
-            <div class="hint">Press <strong>Enter</strong> in any field, or tap Search, to search the ISPC database.</div>
+            <button type="button" id="clearBtn" class="clear-btn">✖ Clear</button>
+        </div>
+    </div>
+
+    <!-- MCC-MNC CARD (collapsed by default) -->
+    <div class="card mccmnc-card collapsed" id="mccMncCard">
+        <div class="collapsible-header" id="mccMncHeader">
+            <h1>MCC-MNC Search</h1>
+            <div class="collapse-toggle-btn" id="mccMncToggleBtn" title="Collapse / expand">▼</div>
+        </div>
+        <div class="collapsible-body" id="mccMncBody">
+            <div class="group">
+                <label for="mccMncInput">MCC / MNC</label>
+                <div class="mccmnc-input-wrapper">
+                    <input type="text" id="mccMncInput" placeholder="28401" autocomplete="off" inputmode="numeric" maxlength="7">
+                </div>
+            </div>
+            <div class="mccmnc-live-results" id="mccMncLiveResults"></div>
+            <button type="button" id="mccMncClearBtn" class="clear-btn" style="margin-top:10px;">✖ Clear</button>
+            <div class="hint">Start typing the MCC (e.g. <strong>284</strong>) — results narrow down live as you keep typing the MNC.</div>
         </div>
     </div>
 
     <!-- WORLD CLOCK CARD (moved directly below the converter, same width) -->
     <div class="card worldclock-card" id="worldClockCard">
-        <h2 class="card-title" style="text-align:center;">Country Time Zone</h2>
-
-        <div class="worldclock-placeholder" id="worldClockPlaceholder">
-            After a successful search, the current time in the found country will be shown here.
+        <div class="collapsible-header" id="worldClockHeader">
+            <h1>World Clock &amp; Map</h1>
+            <div class="collapse-toggle-btn" id="worldClockToggleBtn" title="Collapse / expand">▼</div>
         </div>
 
-        <div class="worldclock-content" id="worldClockContent">
-            <div class="country-clock-label" id="countryClockLabel">— Time now</div>
-            <div class="country-clock-time" id="countryClockTime">--:--:--</div>
-            <div class="utc-info" id="utcOffsetText">UTC —</div>
-            <div class="utc-info" id="utcDiffText">—</div>
-
-            <div class="mini-clocks">
-                <div class="mini-clock-box">
-                    <div class="city">Sofia</div>
-                    <div class="time" id="sofiaTime">--:--:--</div>
-                </div>
-                <div class="mini-clock-box">
-                    <div class="city">Vienna</div>
-                    <div class="time" id="viennaTime">--:--:--</div>
-                </div>
+        <div class="collapsible-body">
+            <div class="worldclock-placeholder" id="worldClockPlaceholder">
+                After a successful search, the current time in the found country will be shown here.
             </div>
 
-            <div id="worldMap"></div>
-            <div class="utc-info" id="worldClockNote"></div>
-        </div>
-    </div>
+            <div class="worldclock-content" id="worldClockContent">
+                <div class="country-clock-label" id="countryClockLabel">— Time now</div>
+                <div class="country-clock-time" id="countryClockTime">--:--:--</div>
+                <div class="utc-info" id="utcOffsetText">UTC —</div>
+                <div class="utc-info" id="utcDiffText">—</div>
+                <div class="utc-info" id="countryDialCode">—</div>
 
-    <!-- RESULTS CARD -->
-    <div class="card results-card" id="resultsCard">
-        <div class="card-header-row">
-            <h2 class="card-title">Search Results</h2>
-            <div class="card-header-actions">
-                <button type="button" id="backToTopBtn" class="back-to-top-btn" title="Back to the converter and map">⬆ Top</button>
-                <div class="db-indicator" id="dbIndicator" title="Loading the database...">
-                    <span class="db-dot loading" id="dbDot"></span>
-                    <span id="dbStatusText">🗄️ database</span>
+                <div class="mini-clocks">
+                    <div class="mini-clock-box">
+                        <div class="city">Sofia</div>
+                        <div class="time" id="sofiaTime">--:--:--</div>
+                    </div>
+                    <div class="mini-clock-box">
+                        <div class="city">Vienna</div>
+                        <div class="time" id="viennaTime">--:--:--</div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="results-placeholder" id="resultsPlaceholder">
-            <div class="results-placeholder-icon">🔍</div>
-            <div class="results-placeholder-text">Enter a Decimal value on the left, then press <kbd class="key-badge">Enter</kbd> to search the ISPC database.</div>
-        </div>
-
-        <div class="results-body" id="resultsBody">
-            <div class="search-message" id="searchMessage"></div>
-
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>DEC Code</th>
-                            <th>ISPC Code</th>
-                            <th>Point Name</th>
-                            <th>Operator Name</th>
-                            <th>Country</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultTableBody">
-                        <tr>
-                            <td colspan="5" class="no-data">Loading database, please wait...</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div id="worldMap"></div>
+                <div class="utc-info" id="worldClockNote"></div>
             </div>
         </div>
     </div>
+
+    <!-- RESULTS CARD (DPC) -->
+        <div class="card results-card" id="resultsCard">
+            <div class="card-header-row">
+                <div class="card-title-block">
+                    <h2 class="card-title">Search Results</h2>
+                    <div class="data-source-note">Source: LIST OF ISPC ITU-T Q.708 file JULY 2024</div>
+                </div>
+                <div class="card-header-actions">
+                    <button type="button" id="backToTopBtn" class="back-to-top-btn" title="Back to the converter and map">⬆ Top</button>
+                    <div class="db-indicator" id="dbIndicator" title="Loading the database...">
+                        <span class="db-dot loading" id="dbDot"></span>
+                        <span id="dbStatusText">🗄️ database</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="collapsible-body">
+                <div class="results-placeholder" id="resultsPlaceholder">
+                    <div class="results-placeholder-icon">🔍</div>
+                    <div class="results-placeholder-text">Enter a Decimal value on the left, then press <kbd class="key-badge">Enter</kbd> to search the ISPC database.</div>
+                </div>
+
+                <div class="results-body" id="resultsBody">
+                    <div class="search-message" id="searchMessage"></div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>DEC Code</th>
+                                    <th>ISPC Code</th>
+                                    <th>Point Name</th>
+                                    <th>Operator Name</th>
+                                    <th>Country</th>
+                                    <th>Flag</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultTableBody">
+                                <tr>
+                                    <td colspan="6" class="no-data">Loading database, please wait...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MCC-MNC RESULTS CARD: starts collapsed, in sync with the
+             mcc-mnc search card on the left starting collapsed too. -->
+        <div class="card results-card mccmnc-results-card collapsed" id="mccMncResultsCard">
+            <div class="card-header-row">
+                <div class="card-title-block">
+                    <h2 class="card-title">MCC-MNC Results</h2>
+                    <div class="data-source-note">Source: uploaded MCC/MNC operator list</div>
+                </div>
+            </div>
+
+            <div class="collapsible-body">
+                <div class="results-placeholder" id="mccMncResultsPlaceholder">
+                    <div class="results-placeholder-icon">🔍</div>
+                    <div class="results-placeholder-text">Start typing an MCC/MNC value in the box on the left to see matching operators here.</div>
+                </div>
+
+                <div class="results-body" id="mccMncResultsBody">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>MCC</th>
+                                    <th>MNC</th>
+                                    <th>TADIG Code</th>
+                                    <th>Operator Name</th>
+                                    <th>Country</th>
+                                    <th>Flag</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mccMncResultTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
 
 </div>
 
@@ -650,10 +872,11 @@
     // timezones), and an approximate centroid [lat, lng] used as a map
     // fallback when no border polygon is available for that country.
     // =====================================================================
-    const countryData = {"Afghanistan":{"capital":"Kabul","iso2":"AF","iso3":"AFG","latlng":[33,65],"tz":"Asia/Kabul"},"Albania":{"capital":"Tirana","iso2":"AL","iso3":"ALB","latlng":[41,20],"tz":"Europe/Tirane"},"Algeria":{"capital":"Algiers","iso2":"DZ","iso3":"DZA","latlng":[28,3],"tz":"Africa/Algiers"},"American Samoa":{"capital":"Pago Pago","iso2":"AS","iso3":"ASM","latlng":[-14.33333333,-170],"tz":"Pacific/Pago_Pago"},"Andorra":{"capital":"Andorra la Vella","iso2":"AD","iso3":"AND","latlng":[42.5,1.5],"tz":"Europe/Andorra"},"Angola":{"capital":"Luanda","iso2":"AO","iso3":"AGO","latlng":[-12.5,18.5],"tz":"Africa/Luanda"},"Anguilla":{"capital":"The Valley","iso2":"AI","iso3":"AIA","latlng":[18.25,-63.16666666],"tz":"America/Anguilla"},"Antigua and Barbuda":{"capital":"Saint John's","iso2":"AG","iso3":"ATG","latlng":[17.05,-61.8],"tz":"America/Antigua"},"Argentina":{"capital":"Buenos Aires","iso2":"AR","iso3":"ARG","latlng":[-34,-64],"tz":"America/Argentina/Buenos_Aires"},"Armenia":{"capital":"Yerevan","iso2":"AM","iso3":"ARM","latlng":[40,45],"tz":"Asia/Yerevan"},"Aruba":{"capital":"Oranjestad","iso2":"AW","iso3":"ABW","latlng":[12.5,-69.96666666],"tz":"America/Aruba"},"Australia":{"capital":"Canberra","iso2":"AU","iso3":"AUS","latlng":[-27,133],"tz":"Australia/Sydney"},"Austria":{"capital":"Vienna","iso2":"AT","iso3":"AUT","latlng":[47.33333333,13.33333333],"tz":"Europe/Vienna"},"Azerbaijan":{"capital":"Baku","iso2":"AZ","iso3":"AZE","latlng":[40.5,47.5],"tz":"Asia/Baku"},"Bahamas":{"capital":"Nassau","iso2":"BS","iso3":"BHS","latlng":[24.25,-76],"tz":"America/Nassau"},"Bahrain":{"capital":"Manama","iso2":"BH","iso3":"BHR","latlng":[26,50.55],"tz":"Asia/Bahrain"},"Bangladesh":{"capital":"Dhaka","iso2":"BD","iso3":"BGD","latlng":[24,90],"tz":"Asia/Dhaka"},"Barbados":{"capital":"Bridgetown","iso2":"BB","iso3":"BRB","latlng":[13.16666666,-59.53333333],"tz":"America/Barbados"},"Belarus":{"capital":"Minsk","iso2":"BY","iso3":"BLR","latlng":[53,28],"tz":"Europe/Minsk"},"Belgium":{"capital":"Brussels","iso2":"BE","iso3":"BEL","latlng":[50.83333333,4],"tz":"Europe/Brussels"},"Belize":{"capital":"Belmopan","iso2":"BZ","iso3":"BLZ","latlng":[17.25,-88.75],"tz":"America/Belize"},"Benin":{"capital":"Porto-Novo","iso2":"BJ","iso3":"BEN","latlng":[9.5,2.25],"tz":"Africa/Porto-Novo"},"Bermuda":{"capital":"Hamilton","iso2":"BM","iso3":"BMU","latlng":[32.33333333,-64.75],"tz":"Atlantic/Bermuda"},"Bhutan":{"capital":"Thimphu","iso2":"BT","iso3":"BTN","latlng":[27.5,90.5],"tz":"Asia/Thimphu"},"Bolivia (Plurinational State of)":{"capital":"Sucre","iso2":"BO","iso3":"BOL","latlng":[-17,-65],"tz":"America/La_Paz"},"Bonaire, Sint Eustatius and Saba":{"capital":"Kralendijk","iso2":"BQ","iso3":"BES","latlng":[12.18,-68.25],"tz":"America/Kralendijk"},"Bosnia and Herzegovina":{"capital":"Sarajevo","iso2":"BA","iso3":"BIH","latlng":[44,18],"tz":"Europe/Sarajevo"},"Botswana":{"capital":"Gaborone","iso2":"BW","iso3":"BWA","latlng":[-22,24],"tz":"Africa/Gaborone"},"Brazil":{"capital":"Brasília","iso2":"BR","iso3":"BRA","latlng":[-10,-55],"tz":"America/Sao_Paulo"},"British Virgin Islands":{"capital":"Road Town","iso2":"VG","iso3":"VGB","latlng":[18.431383,-64.62305],"tz":"America/Tortola"},"Brunei Darussalam":{"capital":"Bandar Seri Begawan","iso2":"BN","iso3":"BRN","latlng":[4.5,114.66666666],"tz":"Asia/Brunei"},"Bulgaria":{"capital":"Sofia","iso2":"BG","iso3":"BGR","latlng":[43,25],"tz":"Europe/Sofia"},"Burkina Faso":{"capital":"Ouagadougou","iso2":"BF","iso3":"BFA","latlng":[13,-2],"tz":"Africa/Ouagadougou"},"Burundi":{"capital":"Gitega","iso2":"BI","iso3":"BDI","latlng":[-3.5,30],"tz":"Africa/Bujumbura"},"Cabo Verde":{"capital":"Praia","iso2":"CV","iso3":"CPV","latlng":[16,-24],"tz":"Atlantic/Cape_Verde"},"Cambodia":{"capital":"Phnom Penh","iso2":"KH","iso3":"KHM","latlng":[13,105],"tz":"Asia/Phnom_Penh"},"Cameroon":{"capital":"Yaoundé","iso2":"CM","iso3":"CMR","latlng":[6,12],"tz":"Africa/Douala"},"Canada":{"capital":"Ottawa","iso2":"CA","iso3":"CAN","latlng":[60,-95],"tz":"America/Toronto"},"Cayman Islands":{"capital":"George Town","iso2":"KY","iso3":"CYM","latlng":[19.5,-80.5],"tz":"America/Cayman"},"Central African Rep.":{"capital":"Bangui","iso2":"CF","iso3":"CAF","latlng":[7,21],"tz":"Africa/Bangui"},"Chile":{"capital":"Santiago","iso2":"CL","iso3":"CHL","latlng":[-30,-71],"tz":"America/Santiago"},"China":{"capital":"Beijing","iso2":"CN","iso3":"CHN","latlng":[35,105],"tz":"Asia/Shanghai"},"Colombia":{"capital":"Bogotá","iso2":"CO","iso3":"COL","latlng":[4,-72],"tz":"America/Bogota"},"Comoros":{"capital":"Moroni","iso2":"KM","iso3":"COM","latlng":[-12.16666666,44.25],"tz":"Indian/Comoro"},"Congo":{"capital":"Brazzaville","iso2":"CG","iso3":"COG","latlng":[-1,15],"tz":"Africa/Brazzaville"},"Cook Islands":{"capital":"Avarua","iso2":"CK","iso3":"COK","latlng":[-21.23333333,-159.76666666],"tz":"Pacific/Rarotonga"},"Costa Rica":{"capital":"San José","iso2":"CR","iso3":"CRI","latlng":[10,-84],"tz":"America/Costa_Rica"},"Croatia":{"capital":"Zagreb","iso2":"HR","iso3":"HRV","latlng":[45.16666666,15.5],"tz":"Europe/Zagreb"},"Cuba":{"capital":"Havana","iso2":"CU","iso3":"CUB","latlng":[21.5,-80],"tz":"America/Havana"},"Curaçao":{"capital":"Willemstad","iso2":"CW","iso3":"CUW","latlng":[12.116667,-68.933333],"tz":"America/Curacao"},"Cyprus":{"capital":"Nicosia","iso2":"CY","iso3":"CYP","latlng":[35,33],"tz":"Asia/Nicosia"},"Czech Rep.":{"capital":"Prague","iso2":"CZ","iso3":"CZE","latlng":[49.75,15.5],"tz":"Europe/Prague"},"Côte d'Ivoire":{"capital":"Yamoussoukro","iso2":"CI","iso3":"CIV","latlng":[8,-5],"tz":"Africa/Abidjan"},"Dem. Rep. of the Congo":{"capital":"Kinshasa","iso2":"CD","iso3":"COD","latlng":[0,25],"tz":"Africa/Kinshasa"},"Denmark":{"capital":"Copenhagen","iso2":"DK","iso3":"DNK","latlng":[56,10],"tz":"Europe/Copenhagen"},"Dominica":{"capital":"Roseau","iso2":"DM","iso3":"DMA","latlng":[15.41666666,-61.33333333],"tz":"America/Dominica"},"Dominican Rep.":{"capital":"Santo Domingo","iso2":"DO","iso3":"DOM","latlng":[19,-70.66666666],"tz":"America/Santo_Domingo"},"Ecuador":{"capital":"Quito","iso2":"EC","iso3":"ECU","latlng":[-2,-77.5],"tz":"America/Guayaquil"},"Egypt":{"capital":"Cairo","iso2":"EG","iso3":"EGY","latlng":[27,30],"tz":"Africa/Cairo"},"El Salvador":{"capital":"San Salvador","iso2":"SV","iso3":"SLV","latlng":[13.83333333,-88.91666666],"tz":"America/El_Salvador"},"Equatorial Guinea":{"capital":"Malabo","iso2":"GQ","iso3":"GNQ","latlng":[2,10],"tz":"Africa/Malabo"},"Eritrea":{"capital":"Asmara","iso2":"ER","iso3":"ERI","latlng":[15,39],"tz":"Africa/Asmara"},"Estonia":{"capital":"Tallinn","iso2":"EE","iso3":"EST","latlng":[59,26],"tz":"Europe/Tallinn"},"Eswatini":{"capital":"Lobamba","iso2":"SZ","iso3":"SWZ","latlng":[-26.5,31.5],"tz":"Africa/Mbabane"},"Ethiopia":{"capital":"Addis Ababa","iso2":"ET","iso3":"ETH","latlng":[8,38],"tz":"Africa/Addis_Ababa"},"Falkland Islands (Malvinas)":{"capital":"Stanley","iso2":"FK","iso3":"FLK","latlng":[-51.75,-59],"tz":"Atlantic/Stanley"},"Faroe Islands":{"capital":"Tórshavn","iso2":"FO","iso3":"FRO","latlng":[62,-7],"tz":"Atlantic/Faroe"},"Fiji":{"capital":"Suva","iso2":"FJ","iso3":"FJI","latlng":[-18,175],"tz":"Pacific/Fiji"},"Finland":{"capital":"Helsinki","iso2":"FI","iso3":"FIN","latlng":[64,26],"tz":"Europe/Helsinki"},"France":{"capital":"Paris","iso2":"FR","iso3":"FRA","latlng":[46,2],"tz":"Europe/Paris"},"French Departments and Territories in the Indian Ocean":{"capital":"Saint-Denis","iso2":"RE","iso3":"REU","latlng":[-21.15,55.5],"tz":"Indian/Reunion"},"French Guiana":{"capital":"Cayenne","iso2":"GF","iso3":"GUF","latlng":[4,-53],"tz":"America/Cayenne"},"French Polynesia":{"capital":"Papeete","iso2":"PF","iso3":"PYF","latlng":[-15,-140],"tz":"Pacific/Tahiti"},"Gabon":{"capital":"Libreville","iso2":"GA","iso3":"GAB","latlng":[-1,11.75],"tz":"Africa/Libreville"},"Gambia":{"capital":"Banjul","iso2":"GM","iso3":"GMB","latlng":[13.46666666,-16.56666666],"tz":"Africa/Banjul"},"Georgia":{"capital":"Tbilisi","iso2":"GE","iso3":"GEO","latlng":[42,43.5],"tz":"Asia/Tbilisi"},"Germany":{"capital":"Berlin","iso2":"DE","iso3":"DEU","latlng":[51,9],"tz":"Europe/Berlin"},"Ghana":{"capital":"Accra","iso2":"GH","iso3":"GHA","latlng":[8,-2],"tz":"Africa/Accra"},"Gibraltar":{"capital":"Gibraltar","iso2":"GI","iso3":"GIB","latlng":[36.13333333,-5.35],"tz":"Europe/Gibraltar"},"Greece":{"capital":"Athens","iso2":"GR","iso3":"GRC","latlng":[39,22],"tz":"Europe/Athens"},"Greenland":{"capital":"Nuuk","iso2":"GL","iso3":"GRL","latlng":[72,-40],"tz":"America/Nuuk"},"Grenada":{"capital":"St. George's","iso2":"GD","iso3":"GRD","latlng":[12.11666666,-61.66666666],"tz":"America/Grenada"},"Guadeloupe":{"capital":"Basse-Terre","iso2":"GP","iso3":"GLP","latlng":[16.25,-61.583333],"tz":"America/Guadeloupe"},"Guam":{"capital":"Hagåtña","iso2":"GU","iso3":"GUM","latlng":[13.46666666,144.78333333],"tz":"Pacific/Guam"},"Guatemala":{"capital":"Guatemala City","iso2":"GT","iso3":"GTM","latlng":[15.5,-90.25],"tz":"America/Guatemala"},"Guinea":{"capital":"Conakry","iso2":"GN","iso3":"GIN","latlng":[11,-10],"tz":"Africa/Conakry"},"Guyana":{"capital":"Georgetown","iso2":"GY","iso3":"GUY","latlng":[5,-59],"tz":"America/Guyana"},"Haiti":{"capital":"Port-au-Prince","iso2":"HT","iso3":"HTI","latlng":[19,-72.41666666],"tz":"America/Port-au-Prince"},"Honduras":{"capital":"Tegucigalpa","iso2":"HN","iso3":"HND","latlng":[15,-86.5],"tz":"America/Tegucigalpa"},"Hong Kong, China":{"capital":"City of Victoria","iso2":"HK","iso3":"HKG","latlng":[22.267,114.188],"tz":"Asia/Hong_Kong"},"Hungary":{"capital":"Budapest","iso2":"HU","iso3":"HUN","latlng":[47,20],"tz":"Europe/Budapest"},"Iceland":{"capital":"Reykjavik","iso2":"IS","iso3":"ISL","latlng":[65,-18],"tz":"Atlantic/Reykjavik"},"India":{"capital":"New Delhi","iso2":"IN","iso3":"IND","latlng":[20,77],"tz":"Asia/Kolkata"},"Indonesia":{"capital":"Jakarta","iso2":"ID","iso3":"IDN","latlng":[-5,120],"tz":"Asia/Jakarta"},"Iran (Islamic Republic of)":{"capital":"Tehran","iso2":"IR","iso3":"IRN","latlng":[32,53],"tz":"Asia/Tehran"},"Iraq":{"capital":"Baghdad","iso2":"IQ","iso3":"IRQ","latlng":[33,44],"tz":"Asia/Baghdad"},"Ireland":{"capital":"Dublin","iso2":"IE","iso3":"IRL","latlng":[53,-8],"tz":"Europe/Dublin"},"Israel":{"capital":"Jerusalem","iso2":"IL","iso3":"ISR","latlng":[31.47,35.13],"tz":"Asia/Jerusalem"},"Italy":{"capital":"Rome","iso2":"IT","iso3":"ITA","latlng":[42.83333333,12.83333333],"tz":"Europe/Rome"},"Jamaica":{"capital":"Kingston","iso2":"JM","iso3":"JAM","latlng":[18.25,-77.5],"tz":"America/Jamaica"},"Japan":{"capital":"Tokyo","iso2":"JP","iso3":"JPN","latlng":[36,138],"tz":"Asia/Tokyo"},"Jordan":{"capital":"Amman","iso2":"JO","iso3":"JOR","latlng":[31,36],"tz":"Asia/Amman"},"Kazakhstan":{"capital":"Astana","iso2":"KZ","iso3":"KAZ","latlng":[48,68],"tz":"Asia/Almaty"},"Kenya":{"capital":"Nairobi","iso2":"KE","iso3":"KEN","latlng":[1,38],"tz":"Africa/Nairobi"},"Kiribati":{"capital":"South Tarawa","iso2":"KI","iso3":"KIR","latlng":[1.41666666,173],"tz":"Pacific/Tarawa"},"Korea (Rep. of)":{"capital":"Seoul","iso2":"KR","iso3":"KOR","latlng":[37,127.5],"tz":"Asia/Seoul"},"Kosovo*":{"capital":"Pristina","iso2":"XK","iso3":"UNK","latlng":[42.666667,21.166667],"tz":"Europe/Belgrade"},"Kuwait":{"capital":"Kuwait City","iso2":"KW","iso3":"KWT","latlng":[29.5,45.75],"tz":"Asia/Kuwait"},"Kyrgyzstan":{"capital":"Bishkek","iso2":"KG","iso3":"KGZ","latlng":[41,75],"tz":"Asia/Bishkek"},"Lao P.D.R.":{"capital":"Vientiane","iso2":"LA","iso3":"LAO","latlng":[18,105],"tz":"Asia/Vientiane"},"Latvia":{"capital":"Riga","iso2":"LV","iso3":"LVA","latlng":[57,25],"tz":"Europe/Riga"},"Lebanon":{"capital":"Beirut","iso2":"LB","iso3":"LBN","latlng":[33.83333333,35.83333333],"tz":"Asia/Beirut"},"Lesotho":{"capital":"Maseru","iso2":"LS","iso3":"LSO","latlng":[-29.5,28.5],"tz":"Africa/Maseru"},"Liberia":{"capital":"Monrovia","iso2":"LR","iso3":"LBR","latlng":[6.5,-9.5],"tz":"Africa/Monrovia"},"Libya":{"capital":"Tripoli","iso2":"LY","iso3":"LBY","latlng":[25,17],"tz":"Africa/Tripoli"},"Liechtenstein":{"capital":"Vaduz","iso2":"LI","iso3":"LIE","latlng":[47.26666666,9.53333333],"tz":"Europe/Vaduz"},"Lithuania":{"capital":"Vilnius","iso2":"LT","iso3":"LTU","latlng":[56,24],"tz":"Europe/Vilnius"},"Luxembourg":{"capital":"Luxembourg","iso2":"LU","iso3":"LUX","latlng":[49.75,6.16666666],"tz":"Europe/Luxembourg"},"Macao, China":{"capital":"Macau","iso2":"MO","iso3":"MAC","latlng":[22.16666666,113.55],"tz":"Asia/Macau"},"Madagascar":{"capital":"Antananarivo","iso2":"MG","iso3":"MDG","latlng":[-20,47],"tz":"Indian/Antananarivo"},"Malaysia":{"capital":"Kuala Lumpur","iso2":"MY","iso3":"MYS","latlng":[2.5,112.5],"tz":"Asia/Kuala_Lumpur"},"Maldives":{"capital":"Malé","iso2":"MV","iso3":"MDV","latlng":[3.25,73],"tz":"Indian/Maldives"},"Mali":{"capital":"Bamako","iso2":"ML","iso3":"MLI","latlng":[17,-4],"tz":"Africa/Bamako"},"Malta":{"capital":"Valletta","iso2":"MT","iso3":"MLT","latlng":[35.83333333,14.58333333],"tz":"Europe/Malta"},"Martinique":{"capital":"Fort-de-France","iso2":"MQ","iso3":"MTQ","latlng":[14.666667,-61],"tz":"America/Martinique"},"Mauritania":{"capital":"Nouakchott","iso2":"MR","iso3":"MRT","latlng":[20,-12],"tz":"Africa/Nouakchott"},"Mauritius":{"capital":"Port Louis","iso2":"MU","iso3":"MUS","latlng":[-20.28333333,57.55],"tz":"Indian/Mauritius"},"Mexico":{"capital":"Mexico City","iso2":"MX","iso3":"MEX","latlng":[23,-102],"tz":"America/Mexico_City"},"Micronesia":{"capital":"Palikir","iso2":"FM","iso3":"FSM","latlng":[6.91666666,158.25],"tz":"Pacific/Pohnpei"},"Moldova (Republic of)":{"capital":"Chișinău","iso2":"MD","iso3":"MDA","latlng":[47,29],"tz":"Europe/Chisinau"},"Monaco":{"capital":"Monaco","iso2":"MC","iso3":"MCO","latlng":[43.73333333,7.4],"tz":"Europe/Monaco"},"Mongolia":{"capital":"Ulan Bator","iso2":"MN","iso3":"MNG","latlng":[46,105],"tz":"Asia/Ulaanbaatar"},"Montenegro":{"capital":"Podgorica","iso2":"ME","iso3":"MNE","latlng":[42.5,19.3],"tz":"Europe/Podgorica"},"Morocco":{"capital":"Rabat","iso2":"MA","iso3":"MAR","latlng":[32,-5],"tz":"Africa/Casablanca"},"Mozambique":{"capital":"Maputo","iso2":"MZ","iso3":"MOZ","latlng":[-18.25,35],"tz":"Africa/Maputo"},"Myanmar":{"capital":"Naypyidaw","iso2":"MM","iso3":"MMR","latlng":[22,98],"tz":"Asia/Yangon"},"Namibia":{"capital":"Windhoek","iso2":"NA","iso3":"NAM","latlng":[-22,17],"tz":"Africa/Windhoek"},"Nauru":{"capital":"Yaren","iso2":"NR","iso3":"NRU","latlng":[-0.53333333,166.91666666],"tz":"Pacific/Nauru"},"Nepal":{"capital":"Kathmandu","iso2":"NP","iso3":"NPL","latlng":[28,84],"tz":"Asia/Kathmandu"},"Netherlands":{"capital":"Amsterdam","iso2":"NL","iso3":"NLD","latlng":[52.5,5.75],"tz":"Europe/Amsterdam"},"New Caledonia":{"capital":"Nouméa","iso2":"NC","iso3":"NCL","latlng":[-21.5,165.5],"tz":"Pacific/Noumea"},"New Zealand":{"capital":"Wellington","iso2":"NZ","iso3":"NZL","latlng":[-41,174],"tz":"Pacific/Auckland"},"Nicaragua":{"capital":"Managua","iso2":"NI","iso3":"NIC","latlng":[13,-85],"tz":"America/Managua"},"Niger":{"capital":"Niamey","iso2":"NE","iso3":"NER","latlng":[16,8],"tz":"Africa/Niamey"},"Nigeria":{"capital":"Abuja","iso2":"NG","iso3":"NGA","latlng":[10,8],"tz":"Africa/Lagos"},"North Macedonia":{"capital":"Skopje","iso2":"MK","iso3":"MKD","latlng":[41.83333333,22],"tz":"Europe/Skopje"},"Northern Marianas":{"capital":"Saipan","iso2":"MP","iso3":"MNP","latlng":[15.2,145.75],"tz":"Pacific/Saipan"},"Norway":{"capital":"Oslo","iso2":"NO","iso3":"NOR","latlng":[62,10],"tz":"Europe/Oslo"},"Oman":{"capital":"Muscat","iso2":"OM","iso3":"OMN","latlng":[21,57],"tz":"Asia/Muscat"},"Pakistan":{"capital":"Islamabad","iso2":"PK","iso3":"PAK","latlng":[30,70],"tz":"Asia/Karachi"},"Palau":{"capital":"Ngerulmud","iso2":"PW","iso3":"PLW","latlng":[7.5,134.5],"tz":"Pacific/Palau"},"Panama":{"capital":"Panama City","iso2":"PA","iso3":"PAN","latlng":[9,-80],"tz":"America/Panama"},"Papua New Guinea":{"capital":"Port Moresby","iso2":"PG","iso3":"PNG","latlng":[-6,147],"tz":"Pacific/Port_Moresby"},"Paraguay":{"capital":"Asunción","iso2":"PY","iso3":"PRY","latlng":[-23,-58],"tz":"America/Asuncion"},"Peru":{"capital":"Lima","iso2":"PE","iso3":"PER","latlng":[-10,-76],"tz":"America/Lima"},"Philippines":{"capital":"Manila","iso2":"PH","iso3":"PHL","latlng":[13,122],"tz":"Asia/Manila"},"Poland":{"capital":"Warsaw","iso2":"PL","iso3":"POL","latlng":[52,20],"tz":"Europe/Warsaw"},"Portugal":{"capital":"Lisbon","iso2":"PT","iso3":"PRT","latlng":[39.5,-8],"tz":"Europe/Lisbon"},"Puerto Rico":{"capital":"San Juan","iso2":"PR","iso3":"PRI","latlng":[18.25,-66.5],"tz":"America/Puerto_Rico"},"Qatar":{"capital":"Doha","iso2":"QA","iso3":"QAT","latlng":[25.5,51.25],"tz":"Asia/Qatar"},"Romania":{"capital":"Bucharest","iso2":"RO","iso3":"ROU","latlng":[46,25],"tz":"Europe/Bucharest"},"Russian Federation":{"capital":"Moscow","iso2":"RU","iso3":"RUS","latlng":[60,100],"tz":"Europe/Moscow"},"Rwanda":{"capital":"Kigali","iso2":"RW","iso3":"RWA","latlng":[-2,30],"tz":"Africa/Kigali"},"Saint Kitts and Nevis":{"capital":"Basseterre","iso2":"KN","iso3":"KNA","latlng":[17.33333333,-62.75],"tz":"America/St_Kitts"},"Saint Lucia":{"capital":"Castries","iso2":"LC","iso3":"LCA","latlng":[13.88333333,-60.96666666],"tz":"America/St_Lucia"},"Saint Pierre and Miquelon":{"capital":"Saint-Pierre","iso2":"PM","iso3":"SPM","latlng":[46.83333333,-56.33333333],"tz":"America/Miquelon"},"Saint Vincent and the Grenadines":{"capital":"Kingstown","iso2":"VC","iso3":"VCT","latlng":[13.25,-61.2],"tz":"America/St_Vincent"},"Samoa":{"capital":"Apia","iso2":"WS","iso3":"WSM","latlng":[-13.58333333,-172.33333333],"tz":"Pacific/Apia"},"San Marino":{"capital":"City of San Marino","iso2":"SM","iso3":"SMR","latlng":[43.76666666,12.41666666],"tz":"Europe/San_Marino"},"Sao Tome and Principe":{"capital":"São Tomé","iso2":"ST","iso3":"STP","latlng":[1,7],"tz":"Africa/Sao_Tome"},"Saudi Arabia":{"capital":"Riyadh","iso2":"SA","iso3":"SAU","latlng":[25,45],"tz":"Asia/Riyadh"},"Senegal":{"capital":"Dakar","iso2":"SN","iso3":"SEN","latlng":[14,-14],"tz":"Africa/Dakar"},"Serbia":{"capital":"Belgrade","iso2":"RS","iso3":"SRB","latlng":[44,21],"tz":"Europe/Belgrade"},"Seychelles":{"capital":"Victoria","iso2":"SC","iso3":"SYC","latlng":[-4.58333333,55.66666666],"tz":"Indian/Mahe"},"Sierra Leone":{"capital":"Freetown","iso2":"SL","iso3":"SLE","latlng":[8.5,-11.5],"tz":"Africa/Freetown"},"Singapore":{"capital":"Singapore","iso2":"SG","iso3":"SGP","latlng":[1.36666666,103.8],"tz":"Asia/Singapore"},"Sint Maarten (Dutch part)":{"capital":"Philipsburg","iso2":"SX","iso3":"SXM","latlng":[18.033333,-63.05],"tz":"America/Lower_Princes"},"Slovakia":{"capital":"Bratislava","iso2":"SK","iso3":"SVK","latlng":[48.66666666,19.5],"tz":"Europe/Bratislava"},"Slovenia":{"capital":"Ljubljana","iso2":"SI","iso3":"SVN","latlng":[46.11666666,14.81666666],"tz":"Europe/Ljubljana"},"Somalia":{"capital":"Mogadishu","iso2":"SO","iso3":"SOM","latlng":[10,49],"tz":"Africa/Mogadishu"},"South Africa":{"capital":"Pretoria","iso2":"ZA","iso3":"ZAF","latlng":[-29,24],"tz":"Africa/Johannesburg"},"South Sudan":{"capital":"Juba","iso2":"SS","iso3":"SSD","latlng":[7,30],"tz":"Africa/Juba"},"Spain":{"capital":"Madrid","iso2":"ES","iso3":"ESP","latlng":[40,-4],"tz":"Europe/Madrid"},"Sri Lanka":{"capital":"Colombo","iso2":"LK","iso3":"LKA","latlng":[7,81],"tz":"Asia/Colombo"},"State of Palestine":{"capital":"Ramallah","iso2":"PS","iso3":"PSE","latlng":[31.9,35.2],"tz":"Asia/Hebron"},"Sudan":{"capital":"Khartoum","iso2":"SD","iso3":"SDN","latlng":[15,30],"tz":"Africa/Khartoum"},"Suriname":{"capital":"Paramaribo","iso2":"SR","iso3":"SUR","latlng":[4,-56],"tz":"America/Paramaribo"},"Sweden":{"capital":"Stockholm","iso2":"SE","iso3":"SWE","latlng":[62,15],"tz":"Europe/Stockholm"},"Switzerland":{"capital":"Bern","iso2":"CH","iso3":"CHE","latlng":[47,8],"tz":"Europe/Zurich"},"Syrian Arab Republic":{"capital":"Damascus","iso2":"SY","iso3":"SYR","latlng":[35,38],"tz":"Asia/Damascus"},"Tajikistan":{"capital":"Dushanbe","iso2":"TJ","iso3":"TJK","latlng":[39,71],"tz":"Asia/Dushanbe"},"Tanzania":{"capital":"Dodoma","iso2":"TZ","iso3":"TZA","latlng":[-6,35],"tz":"Africa/Dar_es_Salaam"},"Thailand":{"capital":"Bangkok","iso2":"TH","iso3":"THA","latlng":[15,100],"tz":"Asia/Bangkok"},"Timor-Leste":{"capital":"Dili","iso2":"TL","iso3":"TLS","latlng":[-8.83333333,125.91666666],"tz":"Asia/Dili"},"Togo":{"capital":"Lomé","iso2":"TG","iso3":"TGO","latlng":[8,1.16666666],"tz":"Africa/Lome"},"Tonga":{"capital":"Nuku'alofa","iso2":"TO","iso3":"TON","latlng":[-20,-175],"tz":"Pacific/Tongatapu"},"Trinidad and Tobago":{"capital":"Port of Spain","iso2":"TT","iso3":"TTO","latlng":[11,-61],"tz":"America/Port_of_Spain"},"Tunisia":{"capital":"Tunis","iso2":"TN","iso3":"TUN","latlng":[34,9],"tz":"Africa/Tunis"},"Turkmenistan":{"capital":"Ashgabat","iso2":"TM","iso3":"TKM","latlng":[40,60],"tz":"Asia/Ashgabat"},"Turks and Caicos Islands":{"capital":"Cockburn Town","iso2":"TC","iso3":"TCA","latlng":[21.75,-71.58333333],"tz":"America/Grand_Turk"},"Türkiye":{"capital":"Ankara","iso2":"TR","iso3":"TUR","latlng":[39,35],"tz":"Europe/Istanbul"},"Uganda":{"capital":"Kampala","iso2":"UG","iso3":"UGA","latlng":[1,32],"tz":"Africa/Kampala"},"Ukraine":{"capital":"Kyiv","iso2":"UA","iso3":"UKR","latlng":[49,32],"tz":"Europe/Kyiv"},"United Arab Emirates":{"capital":"Abu Dhabi","iso2":"AE","iso3":"ARE","latlng":[24,54],"tz":"Asia/Dubai"},"United Kingdom":{"capital":"London","iso2":"GB","iso3":"GBR","latlng":[54,-2],"tz":"Europe/London"},"United States":{"capital":"Washington D.C.","iso2":"US","iso3":"USA","latlng":[38,-97],"tz":"America/New_York"},"Uruguay":{"capital":"Montevideo","iso2":"UY","iso3":"URY","latlng":[-33,-56],"tz":"America/Montevideo"},"Uzbekistan":{"capital":"Tashkent","iso2":"UZ","iso3":"UZB","latlng":[41,64],"tz":"Asia/Tashkent"},"Vanuatu":{"capital":"Port Vila","iso2":"VU","iso3":"VUT","latlng":[-16,167],"tz":"Pacific/Efate"},"Venezuela (Bolivarian Republic of)":{"capital":"Caracas","iso2":"VE","iso3":"VEN","latlng":[8,-66],"tz":"America/Caracas"},"Viet Nam":{"capital":"Hanoi","iso2":"VN","iso3":"VNM","latlng":[16.16666666,107.83333333],"tz":"Asia/Ho_Chi_Minh"},"Yemen":{"capital":"Sana'a","iso2":"YE","iso3":"YEM","latlng":[15,48],"tz":"Asia/Aden"},"Zambia":{"capital":"Lusaka","iso2":"ZM","iso3":"ZMB","latlng":[-15,30],"tz":"Africa/Lusaka"},"Zimbabwe":{"capital":"Harare","iso2":"ZW","iso3":"ZWE","latlng":[-20,30],"tz":"Africa/Harare"}};
+    const countryData = {"Afghanistan":{"capital":"Kabul","iso2":"AF","iso3":"AFG","latlng":[33,65],"tz":"Asia/Kabul","code":"+93"},"Albania":{"capital":"Tirana","iso2":"AL","iso3":"ALB","latlng":[41,20],"tz":"Europe/Tirane","code":"+355"},"Algeria":{"capital":"Algiers","iso2":"DZ","iso3":"DZA","latlng":[28,3],"tz":"Africa/Algiers","code":"+213"},"American Samoa":{"capital":"Pago Pago","iso2":"AS","iso3":"ASM","latlng":[-14.33333333,-170],"tz":"Pacific/Pago_Pago","code":"+1"},"Andorra":{"capital":"Andorra la Vella","iso2":"AD","iso3":"AND","latlng":[42.5,1.5],"tz":"Europe/Andorra","code":"+376"},"Angola":{"capital":"Luanda","iso2":"AO","iso3":"AGO","latlng":[-12.5,18.5],"tz":"Africa/Luanda","code":"+244"},"Anguilla":{"capital":"The Valley","iso2":"AI","iso3":"AIA","latlng":[18.25,-63.16666666],"tz":"America/Anguilla","code":"+1"},"Antigua and Barbuda":{"capital":"Saint John's","iso2":"AG","iso3":"ATG","latlng":[17.05,-61.8],"tz":"America/Antigua","code":"+1"},"Argentina":{"capital":"Buenos Aires","iso2":"AR","iso3":"ARG","latlng":[-34,-64],"tz":"America/Argentina/Buenos_Aires","code":"+54"},"Armenia":{"capital":"Yerevan","iso2":"AM","iso3":"ARM","latlng":[40,45],"tz":"Asia/Yerevan","code":"+374"},"Aruba":{"capital":"Oranjestad","iso2":"AW","iso3":"ABW","latlng":[12.5,-69.96666666],"tz":"America/Aruba","code":"+297"},"Australia":{"capital":"Canberra","iso2":"AU","iso3":"AUS","latlng":[-27,133],"tz":"Australia/Sydney","code":"+61"},"Austria":{"capital":"Vienna","iso2":"AT","iso3":"AUT","latlng":[47.33333333,13.33333333],"tz":"Europe/Vienna","code":"+43"},"Azerbaijan":{"capital":"Baku","iso2":"AZ","iso3":"AZE","latlng":[40.5,47.5],"tz":"Asia/Baku","code":"+994"},"Bahamas":{"capital":"Nassau","iso2":"BS","iso3":"BHS","latlng":[24.25,-76],"tz":"America/Nassau","code":"+1"},"Bahrain":{"capital":"Manama","iso2":"BH","iso3":"BHR","latlng":[26,50.55],"tz":"Asia/Bahrain","code":"+973"},"Bangladesh":{"capital":"Dhaka","iso2":"BD","iso3":"BGD","latlng":[24,90],"tz":"Asia/Dhaka","code":"+880"},"Barbados":{"capital":"Bridgetown","iso2":"BB","iso3":"BRB","latlng":[13.16666666,-59.53333333],"tz":"America/Barbados","code":"+1"},"Belarus":{"capital":"Minsk","iso2":"BY","iso3":"BLR","latlng":[53,28],"tz":"Europe/Minsk","code":"+375"},"Belgium":{"capital":"Brussels","iso2":"BE","iso3":"BEL","latlng":[50.83333333,4],"tz":"Europe/Brussels","code":"+32"},"Belize":{"capital":"Belmopan","iso2":"BZ","iso3":"BLZ","latlng":[17.25,-88.75],"tz":"America/Belize","code":"+501"},"Benin":{"capital":"Porto-Novo","iso2":"BJ","iso3":"BEN","latlng":[9.5,2.25],"tz":"Africa/Porto-Novo","code":"+229"},"Bermuda":{"capital":"Hamilton","iso2":"BM","iso3":"BMU","latlng":[32.33333333,-64.75],"tz":"Atlantic/Bermuda","code":"+1"},"Bhutan":{"capital":"Thimphu","iso2":"BT","iso3":"BTN","latlng":[27.5,90.5],"tz":"Asia/Thimphu","code":"+975"},"Bolivia (Plurinational State of)":{"capital":"Sucre","iso2":"BO","iso3":"BOL","latlng":[-17,-65],"tz":"America/La_Paz","code":"+591"},"Bonaire, Sint Eustatius and Saba":{"capital":"Kralendijk","iso2":"BQ","iso3":"BES","latlng":[12.18,-68.25],"tz":"America/Kralendijk","code":"+599"},"Bosnia and Herzegovina":{"capital":"Sarajevo","iso2":"BA","iso3":"BIH","latlng":[44,18],"tz":"Europe/Sarajevo","code":"+387"},"Botswana":{"capital":"Gaborone","iso2":"BW","iso3":"BWA","latlng":[-22,24],"tz":"Africa/Gaborone","code":"+267"},"Brazil":{"capital":"Brasília","iso2":"BR","iso3":"BRA","latlng":[-10,-55],"tz":"America/Sao_Paulo","code":"+55"},"British Virgin Islands":{"capital":"Road Town","iso2":"VG","iso3":"VGB","latlng":[18.431383,-64.62305],"tz":"America/Tortola","code":"+1"},"Brunei Darussalam":{"capital":"Bandar Seri Begawan","iso2":"BN","iso3":"BRN","latlng":[4.5,114.66666666],"tz":"Asia/Brunei","code":"+673"},"Bulgaria":{"capital":"Sofia","iso2":"BG","iso3":"BGR","latlng":[43,25],"tz":"Europe/Sofia","code":"+359"},"Burkina Faso":{"capital":"Ouagadougou","iso2":"BF","iso3":"BFA","latlng":[13,-2],"tz":"Africa/Ouagadougou","code":"+226"},"Burundi":{"capital":"Gitega","iso2":"BI","iso3":"BDI","latlng":[-3.5,30],"tz":"Africa/Bujumbura","code":"+257"},"Cabo Verde":{"capital":"Praia","iso2":"CV","iso3":"CPV","latlng":[16,-24],"tz":"Atlantic/Cape_Verde","code":"+238"},"Cambodia":{"capital":"Phnom Penh","iso2":"KH","iso3":"KHM","latlng":[13,105],"tz":"Asia/Phnom_Penh","code":"+855"},"Cameroon":{"capital":"Yaoundé","iso2":"CM","iso3":"CMR","latlng":[6,12],"tz":"Africa/Douala","code":"+237"},"Canada":{"capital":"Ottawa","iso2":"CA","iso3":"CAN","latlng":[60,-95],"tz":"America/Toronto","code":"+1"},"Cayman Islands":{"capital":"George Town","iso2":"KY","iso3":"CYM","latlng":[19.5,-80.5],"tz":"America/Cayman","code":"+1"},"Central African Rep.":{"capital":"Bangui","iso2":"CF","iso3":"CAF","latlng":[7,21],"tz":"Africa/Bangui","code":"+236"},"Chile":{"capital":"Santiago","iso2":"CL","iso3":"CHL","latlng":[-30,-71],"tz":"America/Santiago","code":"+56"},"China":{"capital":"Beijing","iso2":"CN","iso3":"CHN","latlng":[35,105],"tz":"Asia/Shanghai","code":"+86"},"Colombia":{"capital":"Bogotá","iso2":"CO","iso3":"COL","latlng":[4,-72],"tz":"America/Bogota","code":"+57"},"Comoros":{"capital":"Moroni","iso2":"KM","iso3":"COM","latlng":[-12.16666666,44.25],"tz":"Indian/Comoro","code":"+269"},"Congo":{"capital":"Brazzaville","iso2":"CG","iso3":"COG","latlng":[-1,15],"tz":"Africa/Brazzaville","code":"+242"},"Cook Islands":{"capital":"Avarua","iso2":"CK","iso3":"COK","latlng":[-21.23333333,-159.76666666],"tz":"Pacific/Rarotonga","code":"+682"},"Costa Rica":{"capital":"San José","iso2":"CR","iso3":"CRI","latlng":[10,-84],"tz":"America/Costa_Rica","code":"+506"},"Croatia":{"capital":"Zagreb","iso2":"HR","iso3":"HRV","latlng":[45.16666666,15.5],"tz":"Europe/Zagreb","code":"+385"},"Cuba":{"capital":"Havana","iso2":"CU","iso3":"CUB","latlng":[21.5,-80],"tz":"America/Havana","code":"+53"},"Curaçao":{"capital":"Willemstad","iso2":"CW","iso3":"CUW","latlng":[12.116667,-68.933333],"tz":"America/Curacao","code":"+599"},"Cyprus":{"capital":"Nicosia","iso2":"CY","iso3":"CYP","latlng":[35,33],"tz":"Asia/Nicosia","code":"+357"},"Czech Rep.":{"capital":"Prague","iso2":"CZ","iso3":"CZE","latlng":[49.75,15.5],"tz":"Europe/Prague","code":"+420"},"Côte d'Ivoire":{"capital":"Yamoussoukro","iso2":"CI","iso3":"CIV","latlng":[8,-5],"tz":"Africa/Abidjan","code":"+225"},"Dem. Rep. of the Congo":{"capital":"Kinshasa","iso2":"CD","iso3":"COD","latlng":[0,25],"tz":"Africa/Kinshasa","code":"+243"},"Denmark":{"capital":"Copenhagen","iso2":"DK","iso3":"DNK","latlng":[56,10],"tz":"Europe/Copenhagen","code":"+45"},"Dominica":{"capital":"Roseau","iso2":"DM","iso3":"DMA","latlng":[15.41666666,-61.33333333],"tz":"America/Dominica","code":"+1"},"Dominican Rep.":{"capital":"Santo Domingo","iso2":"DO","iso3":"DOM","latlng":[19,-70.66666666],"tz":"America/Santo_Domingo","code":"+1"},"Ecuador":{"capital":"Quito","iso2":"EC","iso3":"ECU","latlng":[-2,-77.5],"tz":"America/Guayaquil","code":"+593"},"Egypt":{"capital":"Cairo","iso2":"EG","iso3":"EGY","latlng":[27,30],"tz":"Africa/Cairo","code":"+20"},"El Salvador":{"capital":"San Salvador","iso2":"SV","iso3":"SLV","latlng":[13.83333333,-88.91666666],"tz":"America/El_Salvador","code":"+503"},"Equatorial Guinea":{"capital":"Malabo","iso2":"GQ","iso3":"GNQ","latlng":[2,10],"tz":"Africa/Malabo","code":"+240"},"Eritrea":{"capital":"Asmara","iso2":"ER","iso3":"ERI","latlng":[15,39],"tz":"Africa/Asmara","code":"+291"},"Estonia":{"capital":"Tallinn","iso2":"EE","iso3":"EST","latlng":[59,26],"tz":"Europe/Tallinn","code":"+372"},"Eswatini":{"capital":"Lobamba","iso2":"SZ","iso3":"SWZ","latlng":[-26.5,31.5],"tz":"Africa/Mbabane","code":"+268"},"Ethiopia":{"capital":"Addis Ababa","iso2":"ET","iso3":"ETH","latlng":[8,38],"tz":"Africa/Addis_Ababa","code":"+251"},"Falkland Islands (Malvinas)":{"capital":"Stanley","iso2":"FK","iso3":"FLK","latlng":[-51.75,-59],"tz":"Atlantic/Stanley","code":"+500"},"Faroe Islands":{"capital":"Tórshavn","iso2":"FO","iso3":"FRO","latlng":[62,-7],"tz":"Atlantic/Faroe","code":"+298"},"Fiji":{"capital":"Suva","iso2":"FJ","iso3":"FJI","latlng":[-18,175],"tz":"Pacific/Fiji","code":"+679"},"Finland":{"capital":"Helsinki","iso2":"FI","iso3":"FIN","latlng":[64,26],"tz":"Europe/Helsinki","code":"+358"},"France":{"capital":"Paris","iso2":"FR","iso3":"FRA","latlng":[46,2],"tz":"Europe/Paris","code":"+33"},"French Departments and Territories in the Indian Ocean":{"capital":"Saint-Denis","iso2":"RE","iso3":"REU","latlng":[-21.15,55.5],"tz":"Indian/Reunion","code":"+262"},"French Guiana":{"capital":"Cayenne","iso2":"GF","iso3":"GUF","latlng":[4,-53],"tz":"America/Cayenne","code":"+594"},"French Polynesia":{"capital":"Papeete","iso2":"PF","iso3":"PYF","latlng":[-15,-140],"tz":"Pacific/Tahiti","code":"+689"},"Gabon":{"capital":"Libreville","iso2":"GA","iso3":"GAB","latlng":[-1,11.75],"tz":"Africa/Libreville","code":"+241"},"Gambia":{"capital":"Banjul","iso2":"GM","iso3":"GMB","latlng":[13.46666666,-16.56666666],"tz":"Africa/Banjul","code":"+220"},"Georgia":{"capital":"Tbilisi","iso2":"GE","iso3":"GEO","latlng":[42,43.5],"tz":"Asia/Tbilisi","code":"+995"},"Germany":{"capital":"Berlin","iso2":"DE","iso3":"DEU","latlng":[51,9],"tz":"Europe/Berlin","code":"+49"},"Ghana":{"capital":"Accra","iso2":"GH","iso3":"GHA","latlng":[8,-2],"tz":"Africa/Accra","code":"+233"},"Gibraltar":{"capital":"Gibraltar","iso2":"GI","iso3":"GIB","latlng":[36.13333333,-5.35],"tz":"Europe/Gibraltar","code":"+350"},"Greece":{"capital":"Athens","iso2":"GR","iso3":"GRC","latlng":[39,22],"tz":"Europe/Athens","code":"+30"},"Greenland":{"capital":"Nuuk","iso2":"GL","iso3":"GRL","latlng":[72,-40],"tz":"America/Nuuk","code":"+299"},"Grenada":{"capital":"St. George's","iso2":"GD","iso3":"GRD","latlng":[12.11666666,-61.66666666],"tz":"America/Grenada","code":"+1"},"Guadeloupe":{"capital":"Basse-Terre","iso2":"GP","iso3":"GLP","latlng":[16.25,-61.583333],"tz":"America/Guadeloupe","code":"+590"},"Guam":{"capital":"Hagåtña","iso2":"GU","iso3":"GUM","latlng":[13.46666666,144.78333333],"tz":"Pacific/Guam","code":"+1"},"Guatemala":{"capital":"Guatemala City","iso2":"GT","iso3":"GTM","latlng":[15.5,-90.25],"tz":"America/Guatemala","code":"+502"},"Guinea":{"capital":"Conakry","iso2":"GN","iso3":"GIN","latlng":[11,-10],"tz":"Africa/Conakry","code":"+224"},"Guyana":{"capital":"Georgetown","iso2":"GY","iso3":"GUY","latlng":[5,-59],"tz":"America/Guyana","code":"+592"},"Haiti":{"capital":"Port-au-Prince","iso2":"HT","iso3":"HTI","latlng":[19,-72.41666666],"tz":"America/Port-au-Prince","code":"+509"},"Honduras":{"capital":"Tegucigalpa","iso2":"HN","iso3":"HND","latlng":[15,-86.5],"tz":"America/Tegucigalpa","code":"+504"},"Hong Kong, China":{"capital":"City of Victoria","iso2":"HK","iso3":"HKG","latlng":[22.267,114.188],"tz":"Asia/Hong_Kong","code":"+852"},"Hungary":{"capital":"Budapest","iso2":"HU","iso3":"HUN","latlng":[47,20],"tz":"Europe/Budapest","code":"+36"},"Iceland":{"capital":"Reykjavik","iso2":"IS","iso3":"ISL","latlng":[65,-18],"tz":"Atlantic/Reykjavik","code":"+354"},"India":{"capital":"New Delhi","iso2":"IN","iso3":"IND","latlng":[20,77],"tz":"Asia/Kolkata","code":"+91"},"Indonesia":{"capital":"Jakarta","iso2":"ID","iso3":"IDN","latlng":[-5,120],"tz":"Asia/Jakarta","code":"+62"},"Iran (Islamic Republic of)":{"capital":"Tehran","iso2":"IR","iso3":"IRN","latlng":[32,53],"tz":"Asia/Tehran","code":"+98"},"Iraq":{"capital":"Baghdad","iso2":"IQ","iso3":"IRQ","latlng":[33,44],"tz":"Asia/Baghdad","code":"+964"},"Ireland":{"capital":"Dublin","iso2":"IE","iso3":"IRL","latlng":[53,-8],"tz":"Europe/Dublin","code":"+353"},"Israel":{"capital":"Jerusalem","iso2":"IL","iso3":"ISR","latlng":[31.47,35.13],"tz":"Asia/Jerusalem","code":"+972"},"Italy":{"capital":"Rome","iso2":"IT","iso3":"ITA","latlng":[42.83333333,12.83333333],"tz":"Europe/Rome","code":"+39"},"Jamaica":{"capital":"Kingston","iso2":"JM","iso3":"JAM","latlng":[18.25,-77.5],"tz":"America/Jamaica","code":"+1"},"Japan":{"capital":"Tokyo","iso2":"JP","iso3":"JPN","latlng":[36,138],"tz":"Asia/Tokyo","code":"+81"},"Jordan":{"capital":"Amman","iso2":"JO","iso3":"JOR","latlng":[31,36],"tz":"Asia/Amman","code":"+962"},"Kazakhstan":{"capital":"Astana","iso2":"KZ","iso3":"KAZ","latlng":[48,68],"tz":"Asia/Almaty","code":"+7"},"Kenya":{"capital":"Nairobi","iso2":"KE","iso3":"KEN","latlng":[1,38],"tz":"Africa/Nairobi","code":"+254"},"Kiribati":{"capital":"South Tarawa","iso2":"KI","iso3":"KIR","latlng":[1.41666666,173],"tz":"Pacific/Tarawa","code":"+686"},"Korea (Rep. of)":{"capital":"Seoul","iso2":"KR","iso3":"KOR","latlng":[37,127.5],"tz":"Asia/Seoul","code":"+82"},"Kosovo*":{"capital":"Pristina","iso2":"XK","iso3":"UNK","latlng":[42.666667,21.166667],"tz":"Europe/Belgrade","code":"+383"},"Kuwait":{"capital":"Kuwait City","iso2":"KW","iso3":"KWT","latlng":[29.5,45.75],"tz":"Asia/Kuwait","code":"+965"},"Kyrgyzstan":{"capital":"Bishkek","iso2":"KG","iso3":"KGZ","latlng":[41,75],"tz":"Asia/Bishkek","code":"+996"},"Lao P.D.R.":{"capital":"Vientiane","iso2":"LA","iso3":"LAO","latlng":[18,105],"tz":"Asia/Vientiane","code":"+856"},"Latvia":{"capital":"Riga","iso2":"LV","iso3":"LVA","latlng":[57,25],"tz":"Europe/Riga","code":"+371"},"Lebanon":{"capital":"Beirut","iso2":"LB","iso3":"LBN","latlng":[33.83333333,35.83333333],"tz":"Asia/Beirut","code":"+961"},"Lesotho":{"capital":"Maseru","iso2":"LS","iso3":"LSO","latlng":[-29.5,28.5],"tz":"Africa/Maseru","code":"+266"},"Liberia":{"capital":"Monrovia","iso2":"LR","iso3":"LBR","latlng":[6.5,-9.5],"tz":"Africa/Monrovia","code":"+231"},"Libya":{"capital":"Tripoli","iso2":"LY","iso3":"LBY","latlng":[25,17],"tz":"Africa/Tripoli","code":"+218"},"Liechtenstein":{"capital":"Vaduz","iso2":"LI","iso3":"LIE","latlng":[47.26666666,9.53333333],"tz":"Europe/Vaduz","code":"+423"},"Lithuania":{"capital":"Vilnius","iso2":"LT","iso3":"LTU","latlng":[56,24],"tz":"Europe/Vilnius","code":"+370"},"Luxembourg":{"capital":"Luxembourg","iso2":"LU","iso3":"LUX","latlng":[49.75,6.16666666],"tz":"Europe/Luxembourg","code":"+352"},"Macao, China":{"capital":"Macau","iso2":"MO","iso3":"MAC","latlng":[22.16666666,113.55],"tz":"Asia/Macau","code":"+853"},"Madagascar":{"capital":"Antananarivo","iso2":"MG","iso3":"MDG","latlng":[-20,47],"tz":"Indian/Antananarivo","code":"+261"},"Malaysia":{"capital":"Kuala Lumpur","iso2":"MY","iso3":"MYS","latlng":[2.5,112.5],"tz":"Asia/Kuala_Lumpur","code":"+60"},"Maldives":{"capital":"Malé","iso2":"MV","iso3":"MDV","latlng":[3.25,73],"tz":"Indian/Maldives","code":"+960"},"Mali":{"capital":"Bamako","iso2":"ML","iso3":"MLI","latlng":[17,-4],"tz":"Africa/Bamako","code":"+223"},"Malta":{"capital":"Valletta","iso2":"MT","iso3":"MLT","latlng":[35.83333333,14.58333333],"tz":"Europe/Malta","code":"+356"},"Martinique":{"capital":"Fort-de-France","iso2":"MQ","iso3":"MTQ","latlng":[14.666667,-61],"tz":"America/Martinique","code":"+596"},"Mauritania":{"capital":"Nouakchott","iso2":"MR","iso3":"MRT","latlng":[20,-12],"tz":"Africa/Nouakchott","code":"+222"},"Mauritius":{"capital":"Port Louis","iso2":"MU","iso3":"MUS","latlng":[-20.28333333,57.55],"tz":"Indian/Mauritius","code":"+230"},"Mexico":{"capital":"Mexico City","iso2":"MX","iso3":"MEX","latlng":[23,-102],"tz":"America/Mexico_City","code":"+52"},"Micronesia":{"capital":"Palikir","iso2":"FM","iso3":"FSM","latlng":[6.91666666,158.25],"tz":"Pacific/Pohnpei","code":"+691"},"Moldova (Republic of)":{"capital":"Chișinău","iso2":"MD","iso3":"MDA","latlng":[47,29],"tz":"Europe/Chisinau","code":"+373"},"Monaco":{"capital":"Monaco","iso2":"MC","iso3":"MCO","latlng":[43.73333333,7.4],"tz":"Europe/Monaco","code":"+377"},"Mongolia":{"capital":"Ulan Bator","iso2":"MN","iso3":"MNG","latlng":[46,105],"tz":"Asia/Ulaanbaatar","code":"+976"},"Montenegro":{"capital":"Podgorica","iso2":"ME","iso3":"MNE","latlng":[42.5,19.3],"tz":"Europe/Podgorica","code":"+382"},"Morocco":{"capital":"Rabat","iso2":"MA","iso3":"MAR","latlng":[32,-5],"tz":"Africa/Casablanca","code":"+212"},"Mozambique":{"capital":"Maputo","iso2":"MZ","iso3":"MOZ","latlng":[-18.25,35],"tz":"Africa/Maputo","code":"+258"},"Myanmar":{"capital":"Naypyidaw","iso2":"MM","iso3":"MMR","latlng":[22,98],"tz":"Asia/Yangon","code":"+95"},"Namibia":{"capital":"Windhoek","iso2":"NA","iso3":"NAM","latlng":[-22,17],"tz":"Africa/Windhoek","code":"+264"},"Nauru":{"capital":"Yaren","iso2":"NR","iso3":"NRU","latlng":[-0.53333333,166.91666666],"tz":"Pacific/Nauru","code":"+674"},"Nepal":{"capital":"Kathmandu","iso2":"NP","iso3":"NPL","latlng":[28,84],"tz":"Asia/Kathmandu","code":"+977"},"Netherlands":{"capital":"Amsterdam","iso2":"NL","iso3":"NLD","latlng":[52.5,5.75],"tz":"Europe/Amsterdam","code":"+31"},"New Caledonia":{"capital":"Nouméa","iso2":"NC","iso3":"NCL","latlng":[-21.5,165.5],"tz":"Pacific/Noumea","code":"+687"},"New Zealand":{"capital":"Wellington","iso2":"NZ","iso3":"NZL","latlng":[-41,174],"tz":"Pacific/Auckland","code":"+64"},"Nicaragua":{"capital":"Managua","iso2":"NI","iso3":"NIC","latlng":[13,-85],"tz":"America/Managua","code":"+505"},"Niger":{"capital":"Niamey","iso2":"NE","iso3":"NER","latlng":[16,8],"tz":"Africa/Niamey","code":"+227"},"Nigeria":{"capital":"Abuja","iso2":"NG","iso3":"NGA","latlng":[10,8],"tz":"Africa/Lagos","code":"+234"},"North Macedonia":{"capital":"Skopje","iso2":"MK","iso3":"MKD","latlng":[41.83333333,22],"tz":"Europe/Skopje","code":"+389"},"Northern Marianas":{"capital":"Saipan","iso2":"MP","iso3":"MNP","latlng":[15.2,145.75],"tz":"Pacific/Saipan","code":"+1"},"Norway":{"capital":"Oslo","iso2":"NO","iso3":"NOR","latlng":[62,10],"tz":"Europe/Oslo","code":"+47"},"Oman":{"capital":"Muscat","iso2":"OM","iso3":"OMN","latlng":[21,57],"tz":"Asia/Muscat","code":"+968"},"Pakistan":{"capital":"Islamabad","iso2":"PK","iso3":"PAK","latlng":[30,70],"tz":"Asia/Karachi","code":"+92"},"Palau":{"capital":"Ngerulmud","iso2":"PW","iso3":"PLW","latlng":[7.5,134.5],"tz":"Pacific/Palau","code":"+680"},"Panama":{"capital":"Panama City","iso2":"PA","iso3":"PAN","latlng":[9,-80],"tz":"America/Panama","code":"+507"},"Papua New Guinea":{"capital":"Port Moresby","iso2":"PG","iso3":"PNG","latlng":[-6,147],"tz":"Pacific/Port_Moresby","code":"+675"},"Paraguay":{"capital":"Asunción","iso2":"PY","iso3":"PRY","latlng":[-23,-58],"tz":"America/Asuncion","code":"+595"},"Peru":{"capital":"Lima","iso2":"PE","iso3":"PER","latlng":[-10,-76],"tz":"America/Lima","code":"+51"},"Philippines":{"capital":"Manila","iso2":"PH","iso3":"PHL","latlng":[13,122],"tz":"Asia/Manila","code":"+63"},"Poland":{"capital":"Warsaw","iso2":"PL","iso3":"POL","latlng":[52,20],"tz":"Europe/Warsaw","code":"+48"},"Portugal":{"capital":"Lisbon","iso2":"PT","iso3":"PRT","latlng":[39.5,-8],"tz":"Europe/Lisbon","code":"+351"},"Puerto Rico":{"capital":"San Juan","iso2":"PR","iso3":"PRI","latlng":[18.25,-66.5],"tz":"America/Puerto_Rico","code":"+1"},"Qatar":{"capital":"Doha","iso2":"QA","iso3":"QAT","latlng":[25.5,51.25],"tz":"Asia/Qatar","code":"+974"},"Romania":{"capital":"Bucharest","iso2":"RO","iso3":"ROU","latlng":[46,25],"tz":"Europe/Bucharest","code":"+40"},"Russian Federation":{"capital":"Moscow","iso2":"RU","iso3":"RUS","latlng":[60,100],"tz":"Europe/Moscow","code":"+7"},"Rwanda":{"capital":"Kigali","iso2":"RW","iso3":"RWA","latlng":[-2,30],"tz":"Africa/Kigali","code":"+250"},"Saint Kitts and Nevis":{"capital":"Basseterre","iso2":"KN","iso3":"KNA","latlng":[17.33333333,-62.75],"tz":"America/St_Kitts","code":"+1"},"Saint Lucia":{"capital":"Castries","iso2":"LC","iso3":"LCA","latlng":[13.88333333,-60.96666666],"tz":"America/St_Lucia","code":"+1"},"Saint Pierre and Miquelon":{"capital":"Saint-Pierre","iso2":"PM","iso3":"SPM","latlng":[46.83333333,-56.33333333],"tz":"America/Miquelon","code":"+508"},"Saint Vincent and the Grenadines":{"capital":"Kingstown","iso2":"VC","iso3":"VCT","latlng":[13.25,-61.2],"tz":"America/St_Vincent","code":"+1"},"Samoa":{"capital":"Apia","iso2":"WS","iso3":"WSM","latlng":[-13.58333333,-172.33333333],"tz":"Pacific/Apia","code":"+685"},"San Marino":{"capital":"City of San Marino","iso2":"SM","iso3":"SMR","latlng":[43.76666666,12.41666666],"tz":"Europe/San_Marino","code":"+378"},"Sao Tome and Principe":{"capital":"São Tomé","iso2":"ST","iso3":"STP","latlng":[1,7],"tz":"Africa/Sao_Tome","code":"+239"},"Saudi Arabia":{"capital":"Riyadh","iso2":"SA","iso3":"SAU","latlng":[25,45],"tz":"Asia/Riyadh","code":"+966"},"Senegal":{"capital":"Dakar","iso2":"SN","iso3":"SEN","latlng":[14,-14],"tz":"Africa/Dakar","code":"+221"},"Serbia":{"capital":"Belgrade","iso2":"RS","iso3":"SRB","latlng":[44,21],"tz":"Europe/Belgrade","code":"+381"},"Seychelles":{"capital":"Victoria","iso2":"SC","iso3":"SYC","latlng":[-4.58333333,55.66666666],"tz":"Indian/Mahe","code":"+248"},"Sierra Leone":{"capital":"Freetown","iso2":"SL","iso3":"SLE","latlng":[8.5,-11.5],"tz":"Africa/Freetown","code":"+232"},"Singapore":{"capital":"Singapore","iso2":"SG","iso3":"SGP","latlng":[1.36666666,103.8],"tz":"Asia/Singapore","code":"+65"},"Sint Maarten (Dutch part)":{"capital":"Philipsburg","iso2":"SX","iso3":"SXM","latlng":[18.033333,-63.05],"tz":"America/Lower_Princes","code":"+1"},"Slovakia":{"capital":"Bratislava","iso2":"SK","iso3":"SVK","latlng":[48.66666666,19.5],"tz":"Europe/Bratislava","code":"+421"},"Slovenia":{"capital":"Ljubljana","iso2":"SI","iso3":"SVN","latlng":[46.11666666,14.81666666],"tz":"Europe/Ljubljana","code":"+386"},"Somalia":{"capital":"Mogadishu","iso2":"SO","iso3":"SOM","latlng":[10,49],"tz":"Africa/Mogadishu","code":"+252"},"South Africa":{"capital":"Pretoria","iso2":"ZA","iso3":"ZAF","latlng":[-29,24],"tz":"Africa/Johannesburg","code":"+27"},"South Sudan":{"capital":"Juba","iso2":"SS","iso3":"SSD","latlng":[7,30],"tz":"Africa/Juba","code":"+211"},"Spain":{"capital":"Madrid","iso2":"ES","iso3":"ESP","latlng":[40,-4],"tz":"Europe/Madrid","code":"+34"},"Sri Lanka":{"capital":"Colombo","iso2":"LK","iso3":"LKA","latlng":[7,81],"tz":"Asia/Colombo","code":"+94"},"State of Palestine":{"capital":"Ramallah","iso2":"PS","iso3":"PSE","latlng":[31.9,35.2],"tz":"Asia/Hebron","code":"+970"},"Sudan":{"capital":"Khartoum","iso2":"SD","iso3":"SDN","latlng":[15,30],"tz":"Africa/Khartoum","code":"+249"},"Suriname":{"capital":"Paramaribo","iso2":"SR","iso3":"SUR","latlng":[4,-56],"tz":"America/Paramaribo","code":"+597"},"Sweden":{"capital":"Stockholm","iso2":"SE","iso3":"SWE","latlng":[62,15],"tz":"Europe/Stockholm","code":"+46"},"Switzerland":{"capital":"Bern","iso2":"CH","iso3":"CHE","latlng":[47,8],"tz":"Europe/Zurich","code":"+41"},"Syrian Arab Republic":{"capital":"Damascus","iso2":"SY","iso3":"SYR","latlng":[35,38],"tz":"Asia/Damascus","code":"+963"},"Tajikistan":{"capital":"Dushanbe","iso2":"TJ","iso3":"TJK","latlng":[39,71],"tz":"Asia/Dushanbe","code":"+992"},"Tanzania":{"capital":"Dodoma","iso2":"TZ","iso3":"TZA","latlng":[-6,35],"tz":"Africa/Dar_es_Salaam","code":"+255"},"Thailand":{"capital":"Bangkok","iso2":"TH","iso3":"THA","latlng":[15,100],"tz":"Asia/Bangkok","code":"+66"},"Timor-Leste":{"capital":"Dili","iso2":"TL","iso3":"TLS","latlng":[-8.83333333,125.91666666],"tz":"Asia/Dili","code":"+670"},"Togo":{"capital":"Lomé","iso2":"TG","iso3":"TGO","latlng":[8,1.16666666],"tz":"Africa/Lome","code":"+228"},"Tonga":{"capital":"Nuku'alofa","iso2":"TO","iso3":"TON","latlng":[-20,-175],"tz":"Pacific/Tongatapu","code":"+676"},"Trinidad and Tobago":{"capital":"Port of Spain","iso2":"TT","iso3":"TTO","latlng":[11,-61],"tz":"America/Port_of_Spain","code":"+1"},"Tunisia":{"capital":"Tunis","iso2":"TN","iso3":"TUN","latlng":[34,9],"tz":"Africa/Tunis","code":"+216"},"Turkmenistan":{"capital":"Ashgabat","iso2":"TM","iso3":"TKM","latlng":[40,60],"tz":"Asia/Ashgabat","code":"+993"},"Turks and Caicos Islands":{"capital":"Cockburn Town","iso2":"TC","iso3":"TCA","latlng":[21.75,-71.58333333],"tz":"America/Grand_Turk","code":"+1"},"Türkiye":{"capital":"Ankara","iso2":"TR","iso3":"TUR","latlng":[39,35],"tz":"Europe/Istanbul","code":"+90"},"Uganda":{"capital":"Kampala","iso2":"UG","iso3":"UGA","latlng":[1,32],"tz":"Africa/Kampala","code":"+256"},"Ukraine":{"capital":"Kyiv","iso2":"UA","iso3":"UKR","latlng":[49,32],"tz":"Europe/Kyiv","code":"+380"},"United Arab Emirates":{"capital":"Abu Dhabi","iso2":"AE","iso3":"ARE","latlng":[24,54],"tz":"Asia/Dubai","code":"+971"},"United Kingdom":{"capital":"London","iso2":"GB","iso3":"GBR","latlng":[54,-2],"tz":"Europe/London","code":"+44"},"United States":{"capital":"Washington D.C.","iso2":"US","iso3":"USA","latlng":[38,-97],"tz":"America/New_York","code":"+1"},"Uruguay":{"capital":"Montevideo","iso2":"UY","iso3":"URY","latlng":[-33,-56],"tz":"America/Montevideo","code":"+598"},"Uzbekistan":{"capital":"Tashkent","iso2":"UZ","iso3":"UZB","latlng":[41,64],"tz":"Asia/Tashkent","code":"+998"},"Vanuatu":{"capital":"Port Vila","iso2":"VU","iso3":"VUT","latlng":[-16,167],"tz":"Pacific/Efate","code":"+678"},"Venezuela (Bolivarian Republic of)":{"capital":"Caracas","iso2":"VE","iso3":"VEN","latlng":[8,-66],"tz":"America/Caracas","code":"+58"},"Viet Nam":{"capital":"Hanoi","iso2":"VN","iso3":"VNM","latlng":[16.16666666,107.83333333],"tz":"Asia/Ho_Chi_Minh","code":"+84"},"Yemen":{"capital":"Sana'a","iso2":"YE","iso3":"YEM","latlng":[15,48],"tz":"Asia/Aden","code":"+967"},"Zambia":{"capital":"Lusaka","iso2":"ZM","iso3":"ZMB","latlng":[-15,30],"tz":"Africa/Lusaka","code":"+260"},"Zimbabwe":{"capital":"Harare","iso2":"ZW","iso3":"ZWE","latlng":[-20,30],"tz":"Africa/Harare","code":"+263"},"Chad":{"capital":"N'Djamena","iso2":"TD","iso3":"TCD","latlng":[15,19],"tz":"Africa/Ndjamena","code":"+235"},"Djibouti":{"capital":"Djibouti","iso2":"DJ","iso3":"DJI","latlng":[11.5,42.5],"tz":"Africa/Djibouti","code":"+253"},"Guinea-Bissau":{"capital":"Bissau","iso2":"GW","iso3":"GNB","latlng":[12,-15],"tz":"Africa/Bissau","code":"+245"},"Malawi":{"capital":"Lilongwe","iso2":"MW","iso3":"MWI","latlng":[-13.5,34],"tz":"Africa/Blantyre","code":"+265"},"Montserrat":{"capital":"Brades","iso2":"MS","iso3":"MSR","latlng":[16.75,-62.2],"tz":"America/Montserrat","code":"+1"},"Saint Helena":{"capital":"Jamestown","iso2":"SH","iso3":"SHN","latlng":[-15.95,-5.7],"tz":"Atlantic/St_Helena","code":"+290"},"Solomon Islands":{"capital":"Honiara","iso2":"SB","iso3":"SLB","latlng":[-8,159],"tz":"Pacific/Guadalcanal","code":"+677"},"Taiwan":{"capital":"Taipei","iso2":"TW","iso3":"TWN","latlng":[23.7,121],"tz":"Asia/Taipei","code":"+886"},"U.S. Virgin Islands":{"capital":"Charlotte Amalie","iso2":"VI","iso3":"VIR","latlng":[18.3,-64.9],"tz":"America/St_Thomas","code":"+1"}};
 
     // --- CONVERTER LOGIC ---
     const decInput = document.getElementById('decInput');
+    const hexInput = document.getElementById('hexInput');
     const ituZone = document.getElementById('ituZone');
     const ituArea = document.getElementById('ituArea');
     const ituMember = document.getElementById('ituMember');
@@ -670,14 +893,54 @@
         return cleaned;
     }
 
+    // Fills Hex + 3-8-3 fields from a known 14-bit decimal value (0..16383).
+    function fillFromValue(val) {
+        hexInput.value = val.toString(16).toUpperCase().padStart(4, '0');
+        ituZone.value = (val >> 11) & 0x07;
+        ituArea.value = (val >> 3) & 0xFF;
+        ituMember.value = val & 0x07;
+    }
+
+    function clearAllFields() {
+        decInput.value = '';
+        hexInput.value = '';
+        ituZone.value = ''; ituArea.value = ''; ituMember.value = '';
+    }
+
     decInput.addEventListener('input', () => {
         if (isUpdating) return;
         isUpdating = true;
         const valStr = sanitizeInput(decInput, 16383);
         if (valStr === '') {
+            hexInput.value = '';
             ituZone.value = ''; ituArea.value = ''; ituMember.value = '';
         } else {
-            const val = parseInt(valStr, 10);
+            fillFromValue(parseInt(valStr, 10));
+        }
+        isUpdating = false;
+    });
+
+    function sanitizeHexInput() {
+        let cleaned = hexInput.value.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+        if (cleaned.length > 4) cleaned = cleaned.slice(0, 4);
+        if (cleaned !== '') {
+            let num = parseInt(cleaned, 16);
+            if (num > 16383) { num = 16383; cleaned = num.toString(16).toUpperCase().padStart(4, '0'); }
+        }
+        hexInput.value = cleaned;
+        return cleaned;
+    }
+
+    hexInput.addEventListener('input', () => {
+        if (isUpdating) return;
+        isUpdating = true;
+        const cleaned = sanitizeHexInput();
+        if (cleaned === '') {
+            decInput.value = '';
+            ituZone.value = ''; ituArea.value = ''; ituMember.value = '';
+        } else {
+            const val = parseInt(cleaned, 16);
+            decInput.value = val;
             ituZone.value = (val >> 11) & 0x07;
             ituArea.value = (val >> 3) & 0xFF;
             ituMember.value = val & 0x07;
@@ -694,13 +957,17 @@
 
         if (zStr === '' && aStr === '' && mStr === '') {
             decInput.value = '';
+            hexInput.value = '';
         } else if (zStr !== '' && aStr !== '' && mStr !== '') {
             const z = parseInt(zStr, 10);
             const a = parseInt(aStr, 10);
             const m = parseInt(mStr, 10);
-            decInput.value = (z << 11) + (a << 3) + m;
+            const val = (z << 11) + (a << 3) + m;
+            decInput.value = val;
+            hexInput.value = val.toString(16).toUpperCase().padStart(4, '0');
         } else {
             decInput.value = '';
+            hexInput.value = '';
         }
         isUpdating = false;
     }
@@ -712,7 +979,7 @@
     // Search runs on Enter from any field. preventDefault() stops some
     // mobile keyboards from treating Enter as "move to next field".
     function runSearch() { performSearch(); }
-    [decInput, ituZone, ituArea, ituMember].forEach(el => {
+    [decInput, hexInput, ituZone, ituArea, ituMember].forEach(el => {
         el.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -726,10 +993,40 @@
     // so a visible button is the only reliable way to trigger a search there.
     document.getElementById('searchBtn').addEventListener('click', () => {
         decInput.blur();
+        hexInput.blur();
         ituZone.blur();
         ituArea.blur();
         ituMember.blur();
         runSearch();
+    });
+
+    // Resets a results card back to the exact state it's in on first page
+    // load: placeholder text visible, results table/body hidden again.
+    // Used by both Clear buttons so "Clear" fully undoes a search instead
+    // of only wiping the input fields.
+    function resetResultsPanel(cardId, bodyId) {
+        const card = document.getElementById(cardId);
+        card.classList.remove('revealed');
+        const body = document.getElementById(bodyId);
+        body.classList.remove('shown');
+        body.style.display = ''; // back to CSS default (display: none)
+    }
+
+    // Clear button: wipes all three converter rows and resets the results
+    // area to its pre-search state (no leftover highlighted row / message,
+    // table hidden behind the "Search Results" placeholder again).
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        clearAllFields();
+        const messageEl = document.getElementById('searchMessage');
+        if (messageEl) messageEl.textContent = '';
+        if (currentHighlightedRow) {
+            currentHighlightedRow.classList.remove('highlight-target');
+            currentHighlightedRow = null;
+        }
+        resetResultsPanel('resultsCard', 'resultsBody');
+        resetTableHeight();
+        updateWorldClockPanel(null);
+        decInput.focus();
     });
 
     // =====================================================================
@@ -744,6 +1041,16 @@
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+    }
+
+    // Renders the right-most "Flag" cell for a results-table row. Looks the
+    // country name up in the same countryData map used for the world clock,
+    // so it stays consistent with whatever timezone/flag data already
+    // exists — countries not found there simply render an empty cell.
+    function flagCellHtml(countryName) {
+        const info = countryName ? countryData[countryName] : null;
+        const emoji = info ? isoToFlagEmoji(info.iso2) : '';
+        return `<td data-label="Flag" class="flag-cell">${emoji ? `<span class="country-flag-lg">${emoji}</span>` : ''}</td>`;
     }
 
     // Builds the full results table once, from every row in ispc_codes.
@@ -763,6 +1070,7 @@
                     `<td data-label="Point Name">${escapeHtml(row.SignallingPointName)}</td>` +
                     `<td data-label="Operator Name">${escapeHtml(row.OperatorName)}</td>` +
                     `<td data-label="Country">${escapeHtml(row.Country)}</td>` +
+                    flagCellHtml(row.Country) +
                     `</tr>`
                 );
             }
@@ -771,7 +1079,7 @@
             tableBuilt = true;
         } catch (err) {
             console.error(err);
-            tableBody.innerHTML = `<tr><td colspan="5" class="no-data">Error while loading the table rows.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="6" class="no-data">Error while loading the table rows.</td></tr>`;
         }
     }
 
@@ -798,17 +1106,233 @@
             text.textContent = '🗄️ database';
             indicator.title = 'Error loading the database';
             document.getElementById('resultTableBody').innerHTML =
-                `<tr><td colspan="5" class="no-data">Could not load the database.</td></tr>`;
+                `<tr><td colspan="6" class="no-data">Could not load the database.</td></tr>`;
         }
     }
 
     loadDatabase();
 
     // =====================================================================
+    // COLLAPSIBLE CARDS (converter + MCC-MNC search)
+    // =====================================================================
+    // Collapsing/expanding is driven ONLY from the left search cards. Each
+    // left card's arrow/header also mirrors the same collapsed state onto
+    // its right-side results partner (partnerCardId), so the two boxes in
+    // a row always minimize and restore together, staying level with each
+    // other. The right-side result cards have no arrow of their own.
+    function setupCollapsible(cardId, toggleBtnId, headerId, partnerCardId, onExpand) {
+        const card = document.getElementById(cardId);
+        const toggleBtn = document.getElementById(toggleBtnId);
+        const header = document.getElementById(headerId);
+        const partner = partnerCardId ? document.getElementById(partnerCardId) : null;
+        const toggle = () => {
+            const isCollapsed = card.classList.toggle('collapsed');
+            if (partner) partner.classList.toggle('collapsed', isCollapsed);
+            if (!isCollapsed && typeof onExpand === 'function') onExpand();
+        };
+        header.addEventListener('click', toggle);
+        // Prevent the click from firing twice (once on the button, once
+        // bubbling up to the header, since the button is inside it).
+        toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+    }
+    setupCollapsible('converterCard', 'converterToggleBtn', 'converterHeader', 'resultsCard');
+    setupCollapsible('mccMncCard', 'mccMncToggleBtn', 'mccMncHeader', 'mccMncResultsCard');
+    setupCollapsible('worldClockCard', 'worldClockToggleBtn', 'worldClockHeader', null, () => {
+        // The map container has zero size while collapsed, so if a search
+        // already happened before the user expanded this card, the map
+        // needs to be created/resized now that it's actually visible.
+        const card = document.getElementById('worldClockCard');
+        if (!card.classList.contains('has-data')) return;
+        if (!leafletMap) {
+            initWorldMap();
+            setTimeout(() => highlightCountryOnMap(currentCountryInfo), 0);
+        } else {
+            leafletMap.invalidateSize();
+            highlightCountryOnMap(currentCountryInfo);
+        }
+    });
+
+    // World clock/map card: on a phone the map otherwise pushes the results
+    // table far down the page, so it starts collapsed there; on desktop
+    // there's plenty of room, so it starts expanded. This only sets the
+    // state once at load — it doesn't react to later window resizing.
+    if (window.matchMedia('(max-width: 1000px)').matches) {
+        document.getElementById('worldClockCard').classList.add('collapsed');
+    }
+
+    // =====================================================================
+    // MCC-MNC LIVE SEARCH
+    // =====================================================================
+    const mccMncInput = document.getElementById('mccMncInput');
+    const mccMncLiveResults = document.getElementById('mccMncLiveResults');
+    let currentMccMncSelectedRow = null;
+    let currentMccMncSelectedTadig = null;
+
+    function clearMccMncLiveResults() {
+        mccMncLiveResults.innerHTML = '';
+        mccMncLiveResults.classList.remove('visible');
+        currentMccMncSelectedRow = null;
+        currentMccMncSelectedTadig = null;
+    }
+
+    function renderMccMncResults(rows, prefix) {
+        // Every keystroke re-runs the query and fully rebuilds both the
+        // dropdown AND the results table below from that fresh result set —
+        // this is what makes changing e.g. "28403" to "28401" correctly
+        // switch the shown operator instead of leaving the old one in place.
+        if (rows.length === 0) {
+            mccMncLiveResults.innerHTML = `<div class="mccmnc-no-results">No operator found for "${escapeHtml(prefix)}"</div>`;
+            mccMncLiveResults.classList.add('visible');
+            renderMccMncResultsTable([]);
+            return;
+        }
+        const parts = rows.map(row => {
+            const mccMnc = `${row.MCC}-${row.MNC}`;
+            const rawValue = `${row.MCC}${row.MNC}`;
+            return `<div class="mccmnc-result-row" data-tadig="${escapeHtml(row.TadigCode)}" data-country="${escapeHtml(row.Country)}" data-value="${escapeHtml(rawValue)}">` +
+                `<div class="mm-line1"><span>${escapeHtml(row.Operator)}</span><span class="mm-mccmnc">${escapeHtml(mccMnc)}</span></div>` +
+                `<div class="mm-line2">${escapeHtml(row.Country)} · TADIG: ${escapeHtml(row.TadigCode)}</div>` +
+                `</div>`;
+        });
+        mccMncLiveResults.innerHTML = parts.join('');
+        mccMncLiveResults.classList.add('visible');
+
+        renderMccMncResultsTable(rows);
+
+        // Auto-select when the typed prefix has narrowed things down to a
+        // single matching operator, so the world clock/map/flag update
+        // immediately without requiring an extra click.
+        if (rows.length === 1) {
+            selectMccMncRow(mccMncLiveResults.firstElementChild, rows[0].Country, rows[0].TadigCode);
+        } else {
+            // Multiple (or zero) matches: nothing is uniquely selected yet,
+            // so don't leave a stale highlighted row from a previous query.
+            currentMccMncSelectedRow = null;
+            currentMccMncSelectedTadig = null;
+        }
+    }
+
+    // Rebuilds the "MCC-MNC Results" table on the right from the given rows,
+    // and reveals that card (fading in, same as the DPC results card does
+    // on first search) if it isn't visible yet.
+    function renderMccMncResultsTable(rows) {
+        const tableBody = document.getElementById('mccMncResultTableBody');
+        if (rows.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="6" class="no-data">No matching operators.</td></tr>`;
+        } else {
+            tableBody.innerHTML = rows.map(row =>
+                `<tr data-tadig="${escapeHtml(row.TadigCode)}">` +
+                `<td data-label="MCC">${escapeHtml(row.MCC)}</td>` +
+                `<td data-label="MNC">${escapeHtml(row.MNC)}</td>` +
+                `<td data-label="TADIG Code">${escapeHtml(row.TadigCode)}</td>` +
+                `<td data-label="Operator Name">${escapeHtml(row.Operator)}</td>` +
+                `<td data-label="Country">${escapeHtml(row.Country)}</td>` +
+                flagCellHtml(row.Country) +
+                `</tr>`
+            ).join('');
+        }
+        // Every rebuild starts at full (capped) height; a specific-row
+        // selection right after this (see selectMccMncRow) shrinks it
+        // further to a 3-row window.
+        resetMccMncTableHeight();
+        revealMccMncResults();
+    }
+
+    function revealMccMncResults() {
+        const card = document.getElementById('mccMncResultsCard');
+        card.classList.remove('collapsed'); // auto re-expand after a Clear
+        document.getElementById('mccMncCard').classList.remove('collapsed'); // keep left/right in sync
+        if (card.classList.contains('revealed')) return;
+        card.classList.add('revealed');
+        const body = document.getElementById('mccMncResultsBody');
+        body.style.display = 'flex';
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => { body.classList.add('shown'); });
+        });
+    }
+
+    function selectMccMncRow(rowEl, country, tadigCode) {
+        if (currentMccMncSelectedRow) currentMccMncSelectedRow.classList.remove('selected');
+        if (rowEl) {
+            rowEl.classList.add('selected');
+            currentMccMncSelectedRow = rowEl;
+        }
+        currentMccMncSelectedTadig = tadigCode || null;
+
+        // Mirror the highlight onto the matching row of the results table,
+        // and shrink the table down to a small window around that row
+        // instead of showing the whole capped-height result set.
+        document.querySelectorAll('#mccMncResultTableBody tr.highlight-target')
+            .forEach(tr => tr.classList.remove('highlight-target'));
+        if (tadigCode) {
+            const tr = document.querySelector(`#mccMncResultTableBody tr[data-tadig="${CSS.escape(tadigCode)}"]`);
+            if (tr) tr.classList.add('highlight-target');
+        }
+        fitMccMncTableToResult(tadigCode);
+
+        updateWorldClockPanel(country || null);
+    }
+
+    mccMncLiveResults.addEventListener('click', (e) => {
+        const rowEl = e.target.closest('.mccmnc-result-row');
+        if (!rowEl) return;
+        selectMccMncRow(rowEl, rowEl.dataset.country, rowEl.dataset.tadig);
+        if (rowEl.dataset.value) mccMncInput.value = rowEl.dataset.value;
+        // Close the dropdown once a specific operator has been picked —
+        // the chosen code stays in the field and the match is already
+        // highlighted in the results table on the right.
+        mccMncLiveResults.classList.remove('visible');
+    });
+
+    mccMncInput.addEventListener('input', () => {
+        const prefix = mccMncInput.value.replace(/\D/g, '').slice(0, 7);
+        if (mccMncInput.value !== prefix) mccMncInput.value = prefix;
+
+        if (prefix === '') {
+            clearMccMncLiveResults();
+            updateWorldClockPanel(null);
+            return;
+        }
+
+        if (!db) {
+            mccMncLiveResults.innerHTML = `<div class="mccmnc-no-results">The database is still loading, please wait a moment.</div>`;
+            mccMncLiveResults.classList.add('visible');
+            return;
+        }
+
+        try {
+            const stmt = db.prepare(
+                "SELECT Country, Operator, TadigCode, MCC, MNC FROM mcc_mnc_codes " +
+                "WHERE (MCC || MNC) LIKE :prefix ORDER BY MCC, MNC, Operator LIMIT 200"
+            );
+            stmt.bind({ ':prefix': prefix + '%' });
+            const rows = [];
+            while (stmt.step()) rows.push(stmt.getAsObject());
+            stmt.free();
+            renderMccMncResults(rows, prefix);
+        } catch (err) {
+            console.error(err);
+            mccMncLiveResults.innerHTML = `<div class="mccmnc-no-results">Query error.</div>`;
+            mccMncLiveResults.classList.add('visible');
+        }
+    });
+
+    document.getElementById('mccMncClearBtn').addEventListener('click', () => {
+        mccMncInput.value = '';
+        clearMccMncLiveResults();
+        updateWorldClockPanel(null);
+        // Reset back to the placeholder view (same as the main Clear
+        // button). Collapsing is left entirely to the card's own arrow.
+        resetResultsPanel('mccMncResultsCard', 'mccMncResultsBody');
+        mccMncInput.focus();
+    });
+
+    // =====================================================================
     // WORLD CLOCK
     // =====================================================================
     let currentCountryTz = null;
     let currentCountryLabel = null;
+    let currentCountryInfo = null;
 
     function formatTime(tz) {
         try {
@@ -1048,6 +1572,15 @@
         }
     }
 
+    // Converts a 2-letter ISO country code into its flag emoji, by mapping
+    // each letter to the corresponding Regional Indicator Symbol (U+1F1E6.."A".."Z").
+    // No network/image requests needed — renders using the OS's own emoji font.
+    function isoToFlagEmoji(iso2) {
+        if (!iso2 || iso2.length !== 2) return '';
+        const codePoints = [...iso2.toUpperCase()].map(c => 0x1F1E6 + (c.charCodeAt(0) - 65));
+        return String.fromCodePoint(...codePoints);
+    }
+
     function updateWorldClockPanel(countryName) {
         const card = document.getElementById('worldClockCard');
         const note = document.getElementById('worldClockNote');
@@ -1056,28 +1589,37 @@
         if (info && info.tz) {
             currentCountryTz = info.tz;
             currentCountryLabel = info.capital ? `${countryName}, ${info.capital}` : countryName;
+            currentCountryInfo = info;
             card.classList.add('has-data'); // makes #worldMap visible
 
             const offsetMin = getUtcOffsetMinutes(info.tz);
             const sofiaOffsetMin = getUtcOffsetMinutes('Europe/Sofia');
             document.getElementById('utcOffsetText').innerHTML = `<strong>${currentCountryLabel}</strong>: ${formatOffset(offsetMin)}`;
             document.getElementById('utcDiffText').textContent = formatDiff(offsetMin - sofiaOffsetMin);
+            const flagEmoji = isoToFlagEmoji(info.iso2);
+            document.getElementById('countryDialCode').innerHTML = info.code
+                ? `${flagEmoji ? `<span class="country-flag">${flagEmoji}</span>` : ''}Country code: <strong>${info.code}</strong>`
+                : '';
 
-            if (!leafletMap) {
-                // First time the panel is visible: create the map now that
-                // its container has real dimensions.
-                initWorldMap();
-                setTimeout(() => highlightCountryOnMap(info), 0);
-            } else {
-                leafletMap.invalidateSize();
-                highlightCountryOnMap(info);
+            if (!card.classList.contains('collapsed')) {
+                if (!leafletMap) {
+                    // First time the panel is visible: create the map now that
+                    // its container has real dimensions.
+                    initWorldMap();
+                    setTimeout(() => highlightCountryOnMap(info), 0);
+                } else {
+                    leafletMap.invalidateSize();
+                    highlightCountryOnMap(info);
+                }
             }
             tick();
         } else {
             currentCountryTz = null;
             currentCountryLabel = null;
+            currentCountryInfo = null;
             card.classList.remove('has-data');
             highlightCountryOnMap(null);
+            document.getElementById('countryDialCode').textContent = '—';
             if (countryName) {
                 note.textContent = `No timezone data available for "${countryName}".`;
             } else {
@@ -1097,6 +1639,11 @@
     // search reveals it with a short fade/slide-in effect.
     function revealResults() {
         const card = document.getElementById('resultsCard');
+        // Defensive re-sync: a search implies the converter card must be
+        // expanded (its fields are how the search was triggered), so make
+        // sure both sides of the row are expanded.
+        card.classList.remove('collapsed');
+        document.getElementById('converterCard').classList.remove('collapsed');
         if (card.classList.contains('revealed')) return;
         card.classList.add('revealed');
         const body = document.getElementById('resultsBody');
@@ -1141,6 +1688,7 @@
                     currentHighlightedRow.classList.remove('highlight-target');
                     currentHighlightedRow = null;
                 }
+                resetTableHeight();
                 updateWorldClockPanel(null);
                 return;
             }
@@ -1156,8 +1704,8 @@
             const row = document.querySelector(`tr[data-id="${result.id}"]`);
             if (row) {
                 row.classList.add('highlight-target');
-                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 currentHighlightedRow = row;
+                fitTableToResult(row);
             }
 
             updateWorldClockPanel(result.Country || null);
@@ -1167,6 +1715,74 @@
             messageEl.textContent = 'Query error. Please check the database structure.';
         }
     }
+
+    // Shrinks `container`'s visible height to just the matched `row` plus up
+    // to `radius` rows of context above and below it (instead of showing
+    // the whole result set), and scrolls that window into view right under
+    // the sticky header. Shared by both the DPC and MCC-MNC results tables.
+    function fitTableWindow(container, row, radius) {
+        const thead = container ? container.querySelector('thead') : null;
+        if (!container || !thead || !row) return;
+
+        const tbody = row.parentElement;
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const idx = rows.indexOf(row);
+        if (idx === -1) return;
+
+        const startRow = rows[Math.max(0, idx - radius)];
+        const endRow = rows[Math.min(rows.length - 1, idx + radius)];
+
+        // Reset scroll first so the measurements below aren't skewed by
+        // the sticky header's current translated position.
+        container.scrollTop = 0;
+
+        const containerRect = container.getBoundingClientRect();
+        const headHeight = thead.getBoundingClientRect().height;
+        const startTop = startRow.getBoundingClientRect().top - containerRect.top;
+        const endBottom = endRow.getBoundingClientRect().bottom - containerRect.top;
+
+        const visibleHeight = headHeight + (endBottom - startTop);
+        container.style.maxHeight = Math.ceil(visibleHeight) + 2 + 'px';
+        container.scrollTop = Math.max(0, Math.ceil(startTop - headHeight));
+    }
+
+    // DPC results table: matched row plus up to 2 rows of context above and
+    // below it (5 rows total).
+    function fitTableToResult(row) {
+        fitTableWindow(document.querySelector('.table-container'), row, 2);
+    }
+
+    // Restores the table to its normal (CSS-defined) max-height, used when
+    // a search is cleared or comes back with no match.
+    function resetTableHeight() {
+        const container = document.querySelector('.table-container');
+        if (container) container.style.maxHeight = '';
+    }
+
+    // MCC-MNC results table: once a specific operator is picked (either by
+    // typing a prefix that narrows to a single match, or by clicking a
+    // dropdown row), shrink the table to that row plus 1 row of context
+    // above and below it (3 rows total) instead of the full capped height.
+    function fitMccMncTableToResult(tadigCode) {
+        const container = document.querySelector('#mccMncResultsBody .table-container');
+        const row = tadigCode
+            ? document.querySelector(`#mccMncResultTableBody tr[data-tadig="${CSS.escape(tadigCode)}"]`)
+            : null;
+        if (container && row) {
+            fitTableWindow(container, row, 1);
+        } else if (container) {
+            container.style.maxHeight = '';
+        }
+    }
+
+    // Restores the MCC-MNC results table to its normal (CSS-defined)
+    // max-height — used whenever the result set changes and isn't narrowed
+    // to one specific row yet (e.g. several operators still match).
+    function resetMccMncTableHeight() {
+        const container = document.querySelector('#mccMncResultsBody .table-container');
+        if (container) container.style.maxHeight = '';
+    }
+
 </script>
 
 </body>
